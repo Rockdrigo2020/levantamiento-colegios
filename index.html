@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>LevantApp — Establecimientos</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+  :root {
+    --accent: #f59e0b;
+    --accent-dark: #d97706;
+    --ok: #10b981;
+    --danger: #ef4444;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --border: #334155;
+  }
+  .light {
+    --bg: #f1f5f9;
+    --surface: #ffffff;
+    --surface2: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #cbd5e1;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    transition: background .2s, color .2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .logo-text { font-weight: 700; font-size: 15px; line-height: 1.1; }
+  .logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; }
+
+  /* Nav tabs */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex: 1;
+    min-width: 90px;
+    padding: 12px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all .15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-btn .tab-ico { font-size: 18px; }
+
+  /* Main */
+  main { padding: 16px; max-width: 640px; margin: 0 auto; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Form controls */
+  label { font-size: 13px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 4px; }
+  select, input[type=text], textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color .15s;
+    -webkit-appearance: none;
+  }
+  select:focus, input[type=text]:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  textarea { min-height: 90px; resize: vertical; }
+
+  /* Buttons */
+  .btn {
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 14px 20px;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: inherit;
+    width: 100%;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-success { background: var(--ok); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-ghost {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  .btn-sm { padding: 10px 14px; font-size: 13px; }
+
+  /* Photo capture */
+  .photo-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .photo-zone:hover, .photo-zone.drag { border-color: var(--accent); background: rgba(245,158,11,.05); }
+  .photo-zone img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    position: absolute; top: 0; left: 0;
+  }
+  .photo-zone .photo-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,.6);
+    padding: 6px;
+    font-size: 12px;
+    text-align: center;
+    color: #fff;
+  }
+  .photo-zone .ico { font-size: 36px; }
+  .photo-zone p { font-size: 13px; color: var(--muted); }
+  input[type=file] { display: none; }
+
+  /* Status badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-pending { background: rgba(245,158,11,.15); color: var(--accent); }
+  .badge-done { background: rgba(16,185,129,.15); color: var(--ok); }
+
+  /* Record card */
+  .record-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .15s, transform .1s;
+  }
+  .record-item:active { transform: scale(.99); }
+  .record-item:hover { border-color: var(--accent); }
+  .record-item.selected { border-color: var(--accent); background: rgba(245,158,11,.04); }
+
+  .record-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .record-name { font-weight: 700; font-size: 14px; flex: 1; margin-right: 8px; }
+  .record-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .record-thumb {
+    width: 56px; height: 56px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .record-thumb-placeholder {
+    width: 56px; height: 56px;
+    background: var(--surface2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(120px);
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    z-index: 999;
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    max-width: 90vw;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: var(--ok); }
+  #toast.err { border-color: var(--danger); }
+
+  /* Loading spinner */
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Offline indicator */
+  #offline-bar {
+    background: var(--danger);
+    color: #fff;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px;
+    display: none;
+  }
+  #offline-bar.show { display: block; }
+
+  /* Stats */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-box {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-num { font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 20px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90dvh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+  .empty .ico { font-size: 48px; margin-bottom: 12px; }
+
+  /* Search input */
+  .search-wrap { position: relative; }
+  .search-wrap input { padding-left: 38px; }
+  .search-ico {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  /* Queue indicator */
+  .queue-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-left: 4px;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  .mb-3 { margin-bottom: 12px; }
+  .mt-3 { margin-top: 12px; }
+  .gap-2 { gap: 8px; }
+  .flex { display: flex; }
+  .flex-col { flex-direction: column; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+
+<div id="offline-bar">⚡ Sin conexión — los datos se guardarán localmente</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏫</div>
+    <div>
+      <div class="logo-text">LevantApp</div>
+      <div class="logo-sub">Establecimientos Educacionales</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span id="queue-indicator" style="display:none;font-size:12px;color:var(--accent);font-weight:700"></span>
+    <button onclick="toggleTheme()" style="background:var(--surface2);border:none;border-radius:8px;padding:8px;cursor:pointer;font-size:18px" id="theme-btn">🌙</button>
+  </div>
+</header>
+
+<nav>
+  <button class="tab-btn active" onclick="showTab('dashboard')" id="tab-dashboard">
+    <span class="tab-ico">📊</span>Dashboard
+  </button>
+  <button class="tab-btn" onclick="showTab('levantamiento')" id="tab-levantamiento">
+    <span class="tab-ico">📷</span>Levantamiento
+  </button>
+  <button class="tab-btn" onclick="showTab('subsanacion')" id="tab-subsanacion">
+    <span class="tab-ico">✅</span>Subsanación
+  </button>
+  <button class="tab-btn" onclick="showTab('registros')" id="tab-registros">
+    <span class="tab-ico">📋</span>Registros
+  </button>
+</nav>
+
+<!-- ===================== DASHBOARD ===================== -->
+<main id="tab-content-dashboard">
+  <div class="card">
+    <div class="card-title">📊 Resumen General</div>
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="stat-num" id="stat-total" style="color:var(--accent)">0</div>
+        <div class="stat-label">Total Registros</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="stat-pending" style="color:var(--accent)">0</div>
+        <div class="stat-label">Pendientes</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="stat-done" style="color:var(--ok)">0</div>
+        <div class="stat-label">Subsanados</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="stat-queue" style="color:var(--muted)">0</div>
+        <div class="stat-label">En Cola</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="syncQueue()">🔄 Sincronizar cola offline</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚙️ Configuración</div>
+    <div class="mb-3">
+      <label>URL del Google Apps Script (Web App)</label>
+      <input type="text" id="config-url" placeholder="https://script.google.com/macros/s/.../exec"
+        value="" oninput="saveConfig()">
+    </div>
+    <div class="mb-3">
+      <label>ID Carpeta Google Drive (para fotos)</label>
+      <input type="text" id="config-drive" placeholder="1AbCdEfGhIjKlMnOpQrSt"
+        value="" oninput="saveConfig()">
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">
+      💡 Estos datos se guardan en tu dispositivo. Copia la URL del Web App del paso 3 de las instrucciones.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📤 Acceso Rápido</div>
+    <div class="grid-2">
+      <button class="btn btn-primary" onclick="showTab('levantamiento')">📷 Nuevo Levantamiento</button>
+      <button class="btn btn-success" onclick="showTab('subsanacion')">✅ Registrar Subsanación</button>
+    </div>
+  </div>
+</main>
+
+<!-- ===================== LEVANTAMIENTO ===================== -->
+<main id="tab-content-levantamiento" style="display:none">
+  <div class="card">
+    <div class="card-title">🏫 Establecimiento</div>
+    <div class="mb-3">
+      <label>Selecciona o escribe el colegio</label>
+      <select id="lev-establecimiento" onchange="checkNewEstab()">
+        <option value="">— Elige un establecimiento —</option>
+        <option value="__nuevo__">➕ Agregar nuevo establecimiento...</option>
+        <!-- Established options injected by JS -->
+      </select>
+    </div>
+    <div id="nuevo-estab-section" style="display:none" class="mb-3">
+      <label>Nombre del nuevo establecimiento</label>
+      <input type="text" id="nuevo-estab-input" placeholder="Nombre completo del colegio">
+      <button class="btn btn-ghost btn-sm mt-3" onclick="agregarNuevoEstab()">➕ Agregar a la lista</button>
+    </div>
+    <div class="mb-3">
+      <label>Categoría / Sector</label>
+      <select id="lev-categoria">
+        <option value="">— Selecciona categoría —</option>
+        <option>Infraestructura General</option>
+        <option>Instalación Eléctrica</option>
+        <option>Instalación Sanitaria</option>
+        <option>Techumbres y Cubiertas</option>
+        <option>Revestimientos y Pintura</option>
+        <option>Ventanas y Puertas</option>
+        <option>Pisos y Pavimentos</option>
+        <option>Cielos y Tabiques</option>
+        <option>Baños y SSHH</option>
+        <option>Cocina y Comedor</option>
+        <option>Sala de Clases</option>
+        <option>Gimnasio / Multicancha</option>
+        <option>Patio y Exterior</option>
+        <option>Accesibilidad</option>
+        <option>Seguridad y Emergencias</option>
+        <option>Equipamiento TIC</option>
+        <option>Otro</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📷 Foto del Estado Actual</div>
+    <div class="photo-zone" id="lev-photo-zone" onclick="triggerCamera('lev-file')">
+      <div class="ico">📸</div>
+      <p>Toca para tomar foto</p>
+      <p style="font-size:11px;color:var(--muted)">o seleccionar desde galería</p>
+    </div>
+    <input type="file" id="lev-file" accept="image/*" capture="environment" onchange="handlePhoto('lev', this)">
+    <div class="grid-2 mt-3">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('lev-file').removeAttribute('capture');document.getElementById('lev-file').click()">🖼 Galería</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('lev-file').setAttribute('capture','environment');document.getElementById('lev-file').click()">📷 Cámara</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 Observación</div>
+    <textarea id="lev-obs" placeholder="Describe la deficiencia encontrada: tipo de daño, ubicación exacta, gravedad estimada..."></textarea>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 Información Adicional</div>
+    <div class="mb-3">
+      <label>Prioridad</label>
+      <select id="lev-prioridad">
+        <option value="Normal">Normal</option>
+        <option value="Alta">🔴 Alta</option>
+        <option value="Media">🟡 Media</option>
+        <option value="Baja">🟢 Baja</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="lev-submit" onclick="submitLevantamiento()" style="margin-bottom:24px">
+    💾 Guardar Levantamiento
+  </button>
+</main>
+
+<!-- ===================== SUBSANACIÓN ===================== -->
+<main id="tab-content-subsanacion" style="display:none">
+  <div class="card">
+    <div class="card-title">🔍 Filtrar Pendientes</div>
+    <div class="search-wrap mb-3">
+      <span class="search-ico">🔎</span>
+      <input type="text" id="sub-search" placeholder="Buscar por colegio o categoría..."
+        oninput="renderPendientes()">
+    </div>
+    <select id="sub-filter-estab" onchange="renderPendientes()">
+      <option value="">Todos los establecimientos</option>
+    </select>
+  </div>
+
+  <div id="pendientes-list">
+    <div class="empty">
+      <div class="ico">📭</div>
+      <p>No hay registros pendientes</p>
+    </div>
+  </div>
+</main>
+
+<!-- ===================== REGISTROS ===================== -->
+<main id="tab-content-registros" style="display:none">
+  <div class="card">
+    <div class="card-title">📋 Todos los Registros</div>
+    <div class="search-wrap mb-3">
+      <span class="search-ico">🔎</span>
+      <input type="text" id="reg-search" placeholder="Buscar..." oninput="renderRegistros()">
+    </div>
+    <div class="grid-2">
+      <select id="reg-filter-estado" onchange="renderRegistros()">
+        <option value="">Todos</option>
+        <option value="Pendiente">Pendiente</option>
+        <option value="Subsanado">Subsanado</option>
+      </select>
+      <select id="reg-filter-estab" onchange="renderRegistros()">
+        <option value="">Todos establ.</option>
+      </select>
+    </div>
+  </div>
+  <div id="registros-list"></div>
+</main>
+
+<!-- ===================== MODAL SUBSANACIÓN ===================== -->
+<div class="modal-overlay" id="modal-subsanacion">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="modal-sub-content"></div>
+  </div>
+</div>
+
+<!-- ===================== MODAL DETALLE ===================== -->
+<div class="modal-overlay" id="modal-detalle">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="modal-det-content"></div>
+  </div>
+</div>
+
+<div id="toast">
+  <span id="toast-ico"></span>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+// ==================== CONFIG & STATE ====================
+const ESTABLECIMIENTOS = ["Alhuelemu","CENTRO DE EDUCACIÓN DE ADULTOS ADELAIDA MORENO","Copito De Nieve","ESCUELA ADULTOS RIO SUR","ESCUELA ALEJANDRO PEREZ URBANO","ESCUELA ALHUELEMU","ESCUELA ARTÍSTICA PROFESOR ALFONSO LLOVERAS CUEVAS","ESCUELA BASICA AURORA DE ENERO","ESCUELA BASICA BUREO","ESCUELA BASICA CAMPAMENTO","ESCUELA BASICA CASAS DE PILE","ESCUELA BASICA CENTINELA","ESCUELA BASICA CERRO EL PADRE","ESCUELA BASICA CERRO PILQUE","ESCUELA BASICA CORCOVADO","ESCUELA BASICA DE BELLAVISTA","ESCUELA BASICA EL EDEN","ESCUELA BASICA EL ESFUERZO","ESCUELA BASICA EL PARRON","ESCUELA BASICA LA HOYADA","ESCUELA BASICA LONCOPANGUE","ESCUELA BASICA LOS HINOJOS","ESCUELA BASICA MAÑIL","ESCUELA BASICA MULCHEN","ESCUELA BASICA MUNILQUE IZAURIETA","ESCUELA BASICA PILGUEN","ESCUELA BASICA PITRIL","ESCUELA BASICA RAPELCO","ESCUELA BASICA RIO PARDO","ESCUELA BASICA RUCALHUE","ESCUELA BASICA SAN LUIS DE MALVEN","ESCUELA BASICA SANTA ADRIANA","ESCUELA BASICA VILLA LAS PEÑAS","ESCUELA BASICA VILLA MERCEDES","ESCUELA BASICA VILLACURA","ESCUELA BLANCO ENCALADA","ESCUELA BÁSICA CACIQUE LEVIÁN","ESCUELA CALLAQUI","ESCUELA DE CONCENTRACIÓN FRONTERIZA RALCO ALTO BIOBÍO","ESCUELA DE EDUCACIÓN GENERAL BÁSICA EL HUACHI","ESCUELA ERMINDA GOMEZ DE POLIC.","ESCUELA ESPECIAL DE LA SOLIDARIDAD","ESCUELA IGNACIO VERDUGO CAVADA","ESCUELA LAS ARENAS","ESCUELA LAS HIJUELAS","ESCUELA LOMAS DE TUCAPEL","ESCUELA LOS AROMOS","ESCUELA LOS AVELLANOS","ESCUELA LOS BOLDOS","ESCUELA LOS NOTROS","ESCUELA LUIS MARTÍNEZ GONZÁLEZ","ESCUELA MARIANO PUGA VEGA","ESCUELA OLGA RIOS DE PINOCHET","ESCUELA PROFESORA ALBERTINA SÁNCHEZ VALENZUELA","ESCUELA QUILLAILEO","ESCUELA RALCO LEPOY","ESCUELA RINCONADA","ESCUELA SACERDOTE ALEJANDRO MANERA","ESCUELA VILLA LA GRANJA","ESCUELA VOLCÁN ANTUCO","Espumita","LICEO ANDRÉS ALCÁZAR TUCAPEL","LICEO BICENTENARIO DE EXCELENCIA NUEVO MUNDO","LICEO BICENTENARIO VALLE DE SOL QUILACO","LICEO CARDENAL ANTONIO SAMORE","LICEO CRISOL","LICEO DE HUEPIL","LICEO DOCTOR VÍCTOR RÍOS RUIZ","LICEO FRANCISCO BASCUÑAN GUERRERO","LICEO ISABEL RIQUELME","LICEO MIGUEL ÁNGEL CERDA LEIVA","LICEO RALCO","La Esperanza","Los Cipreces","Manitos Mágicas","Mi Despertar","Mi Pequeño Mundo","Mis Primeros Pasos","Pequeños Genios","Rayitos De Sol","Rinconcito De Amor","Ronda De Niños Y Niñas","Semillitas Del Futuro","Sonrisa De Ángeles","Villa La Granja","Villa Rehuen","Étnico Callaqui"];
+
+let extraEstabs = JSON.parse(localStorage.getItem('extra_estabs') || '[]');
+let records = JSON.parse(localStorage.getItem('lev_records') || '[]');
+let offlineQueue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+let config = JSON.parse(localStorage.getItem('lev_config') || '{"https://script.google.com/macros/s/AKfycbxDmcIlstTvkW0ECsNu0-J-zSrKJV34rTj0uZFY8GVEeQJOl_IuOn-t5KTsbOxbU_eACQ/exec":"","1xhW2XPSJCgq0zhduvYroCc2lEVJX0fsu":""}');
+let currentPhotoData = {lev: null, sub: null};
+let currentEditId = null;
+let isDark = localStorage.getItem('theme') !== 'light';
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', () => {
+  if (!isDark) document.body.classList.add('light');
+  document.getElementById('theme-btn').textContent = isDark ? '🌙' : '☀️';
+
+  document.getElementById('config-url').value = config.url || '';
+  document.getElementById('config-drive').value = config.drive || '';
+
+  populateEstabs();
+  updateStats();
+  renderPendientes();
+  renderRegistros();
+  updateQueueIndicator();
+
+  window.addEventListener('online', () => {
+    document.getElementById('offline-bar').classList.remove('show');
+    syncQueue();
+  });
+  window.addEventListener('offline', () => {
+    document.getElementById('offline-bar').classList.add('show');
+  });
+  if (!navigator.onLine) document.getElementById('offline-bar').classList.add('show');
+
+  // Close modals on overlay click
+  document.getElementById('modal-subsanacion').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-subsanacion') closeModal('modal-subsanacion');
+  });
+  document.getElementById('modal-detalle').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-detalle') closeModal('modal-detalle');
+  });
+});
+
+// ==================== THEME ====================
+function toggleTheme() {
+  isDark = !isDark;
+  document.body.classList.toggle('light', !isDark);
+  document.getElementById('theme-btn').textContent = isDark ? '🌙' : '☀️';
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+}
+
+// ==================== CONFIG ====================
+function saveConfig() {
+  config.url = document.getElementById('config-url').value.trim();
+  config.drive = document.getElementById('config-drive').value.trim();
+  localStorage.setItem('lev_config', JSON.stringify(config));
+}
+
+// ==================== TABS ====================
+function showTab(tab) {
+  ['dashboard','levantamiento','subsanacion','registros'].forEach(t => {
+    document.getElementById('tab-content-'+t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'subsanacion') { renderPendientes(); populateSubFilters(); }
+  if (tab === 'registros') { renderRegistros(); populateRegFilters(); }
+  if (tab === 'dashboard') updateStats();
+}
+
+// ==================== ESTABLECIMIENTOS ====================
+function getAllEstabs() {
+  return [...ESTABLECIMIENTOS, ...extraEstabs].sort((a,b) => a.localeCompare(b));
+}
+
+function populateEstabs() {
+  const sel = document.getElementById('lev-establecimiento');
+  const currentVal = sel.value;
+  // Remove all except first two options
+  while (sel.options.length > 2) sel.remove(2);
+  getAllEstabs().forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e; opt.textContent = e;
+    sel.insertBefore(opt, sel.options[1]); // Before "Agregar nuevo"
+  });
+  if (currentVal) sel.value = currentVal;
+}
+
+function checkNewEstab() {
+  const val = document.getElementById('lev-establecimiento').value;
+  document.getElementById('nuevo-estab-section').style.display = val === '__nuevo__' ? 'block' : 'none';
+}
+
+function agregarNuevoEstab() {
+  const name = document.getElementById('nuevo-estab-input').value.trim();
+  if (!name) { toast('⚠️ Escribe el nombre del establecimiento', 'err'); return; }
+  if (getAllEstabs().includes(name)) { toast('Ya existe en la lista', 'err'); return; }
+  extraEstabs.push(name);
+  localStorage.setItem('extra_estabs', JSON.stringify(extraEstabs));
+  populateEstabs();
+  document.getElementById('lev-establecimiento').value = name;
+  document.getElementById('nuevo-estab-section').style.display = 'none';
+  document.getElementById('nuevo-estab-input').value = '';
+  toast('✅ Establecimiento agregado', 'ok');
+}
+
+// ==================== PHOTO HANDLING ====================
+function triggerCamera(inputId) {
+  document.getElementById(inputId).click();
+}
+
+function handlePhoto(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Compress image
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = h * MAX / w; w = MAX; }
+      if (h > MAX) { w = w * MAX / h; h = MAX; }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const b64 = canvas.toDataURL('image/jpeg', 0.75);
+      currentPhotoData[type] = b64;
+
+      // Preview
+      const zone = document.getElementById(type+'-photo-zone');
+      zone.innerHTML = `<img src="${b64}" alt="foto"><div class="photo-overlay">📷 Toca para cambiar</div>`;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ==================== LEVANTAMIENTO ====================
+async function submitLevantamiento() {
+  const estab = document.getElementById('lev-establecimiento').value;
+  const cat = document.getElementById('lev-categoria').value;
+  const obs = document.getElementById('lev-obs').value.trim();
+  const prioridad = document.getElementById('lev-prioridad').value;
+
+  if (!estab || estab === '__nuevo__') { toast('⚠️ Selecciona un establecimiento', 'err'); return; }
+  if (!cat) { toast('⚠️ Selecciona una categoría', 'err'); return; }
+  if (!obs) { toast('⚠️ Escribe una observación', 'err'); return; }
+  if (!currentPhotoData.lev) { toast('⚠️ Captura una foto del estado actual', 'err'); return; }
+
+  const btn = document.getElementById('lev-submit');
+  btn.innerHTML = '<div class="spinner"></div> Guardando...';
+  btn.disabled = true;
+
+  const record = {
+    id: 'LEV_' + Date.now(),
+    establecimiento: estab,
+    categoria: cat,
+    foto_antes: currentPhotoData.lev,
+    observacion_antes: obs,
+    fecha_antes: new Date().toLocaleString('es-CL'),
+    foto_despues: '',
+    observacion_despues: '',
+    fecha_despues: '',
+    estado: 'Pendiente',
+    prioridad: prioridad,
+    synced: false
+  };
+
+  records.push(record);
+  saveRecords();
+  updateStats();
+
+  // Try to sync
+  const sent = await sendToSheet(record);
+  if (sent) {
+    record.synced = true;
+    saveRecords();
+    toast('✅ Levantamiento guardado y enviado', 'ok');
+  } else {
+    offlineQueue.push({action: 'nuevo', data: record});
+    localStorage.setItem('offline_queue', JSON.stringify(offlineQueue));
+    updateQueueIndicator();
+    toast('💾 Guardado localmente (sin conexión)', 'ok');
+  }
+
+  // Reset form
+  document.getElementById('lev-establecimiento').value = '';
+  document.getElementById('lev-categoria').value = '';
+  document.getElementById('lev-obs').value = '';
+  document.getElementById('lev-prioridad').value = 'Normal';
+  document.getElementById('lev-photo-zone').innerHTML = '<div class="ico">📸</div><p>Toca para tomar foto</p><p style="font-size:11px;color:var(--muted)">o seleccionar desde galería</p>';
+  currentPhotoData.lev = null;
+
+  btn.innerHTML = '💾 Guardar Levantamiento';
+  btn.disabled = false;
+}
+
+// ==================== SUBSANACIÓN ====================
+function populateSubFilters() {
+  const sel = document.getElementById('sub-filter-estab');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todos los establecimientos</option>';
+  const estabs = [...new Set(records.filter(r => r.estado === 'Pendiente').map(r => r.establecimiento))].sort();
+  estabs.forEach(e => { const o = document.createElement('option'); o.value=e; o.textContent=e; sel.appendChild(o); });
+  if (cur) sel.value = cur;
+}
+
+function populateRegFilters() {
+  const sel = document.getElementById('reg-filter-estab');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todos establ.</option>';
+  const estabs = [...new Set(records.map(r => r.establecimiento))].sort();
+  estabs.forEach(e => { const o = document.createElement('option'); o.value=e; o.textContent=e; sel.appendChild(o); });
+  if (cur) sel.value = cur;
+}
+
+function renderPendientes() {
+  const search = document.getElementById('sub-search').value.toLowerCase();
+  const filterEstab = document.getElementById('sub-filter-estab').value;
+
+  let pending = records.filter(r => r.estado === 'Pendiente');
+  if (filterEstab) pending = pending.filter(r => r.establecimiento === filterEstab);
+  if (search) pending = pending.filter(r =>
+    r.establecimiento.toLowerCase().includes(search) ||
+    r.categoria.toLowerCase().includes(search) ||
+    r.observacion_antes.toLowerCase().includes(search)
+  );
+
+  const container = document.getElementById('pendientes-list');
+  if (!pending.length) {
+    container.innerHTML = '<div class="empty"><div class="ico">📭</div><p>No hay registros pendientes</p></div>';
+    return;
+  }
+
+  container.innerHTML = pending.map(r => `
+    <div class="record-item" onclick="openSubsanacionModal('${r.id}')">
+      <div class="record-header">
+        <div>
+          <div class="record-name">${r.establecimiento}</div>
+          <div class="record-meta">${r.categoria} · ${r.fecha_antes}</div>
+          <div style="margin-top:6px"><span class="badge badge-pending">⏳ Pendiente</span>${r.prioridad && r.prioridad !== 'Normal' ? ` <span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444">${r.prioridad}</span>` : ''}</div>
+        </div>
+        ${r.foto_antes ? `<img src="${r.foto_antes}" class="record-thumb">` : '<div class="record-thumb-placeholder">📷</div>'}
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px;line-height:1.4">${r.observacion_antes.substring(0,100)}${r.observacion_antes.length > 100 ? '...' : ''}</div>
+    </div>
+  `).join('');
+}
+
+function openSubsanacionModal(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  currentEditId = id;
+  currentPhotoData.sub = null;
+
+  document.getElementById('modal-sub-content').innerHTML = `
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">${r.establecimiento}</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${r.categoria}</p>
+
+    <div class="card" style="margin-bottom:12px;padding:12px">
+      <div class="card-title" style="margin-bottom:8px">📷 Foto Estado Anterior</div>
+      ${r.foto_antes ? `<img src="${r.foto_antes}" style="width:100%;border-radius:8px;max-height:200px;object-fit:cover">` : '<p style="color:var(--muted)">Sin foto anterior</p>'}
+      <p style="font-size:13px;margin-top:8px;color:var(--muted)">${r.observacion_antes}</p>
+    </div>
+
+    <hr class="divider">
+
+    <div class="card-title">✅ Registrar Subsanación</div>
+    <div class="mb-3">
+      <div class="photo-zone" id="sub-photo-zone" onclick="document.getElementById('sub-file').click()">
+        <div class="ico">📸</div>
+        <p>Foto del estado subsanado</p>
+      </div>
+      <input type="file" id="sub-file" accept="image/*" capture="environment" onchange="handlePhoto('sub',this)">
+      <div class="grid-2 mt-3">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('sub-file').removeAttribute('capture');document.getElementById('sub-file').click()">🖼 Galería</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('sub-file').setAttribute('capture','environment');document.getElementById('sub-file').click()">📷 Cámara</button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label>Observación de la subsanación</label>
+      <textarea id="sub-obs" placeholder="Describe cómo se subsanó el problema..."></textarea>
+    </div>
+
+    <button class="btn btn-success" onclick="guardarSubsanacion()">✅ Marcar como Subsanado</button>
+    <button class="btn btn-ghost mt-3" onclick="closeModal('modal-subsanacion')">Cancelar</button>
+  `;
+
+  openModal('modal-subsanacion');
+}
+
+async function guardarSubsanacion() {
+  const obs = document.getElementById('sub-obs').value.trim();
+  if (!currentPhotoData.sub) { toast('⚠️ Captura la foto del estado subsanado', 'err'); return; }
+
+  const idx = records.findIndex(r => r.id === currentEditId);
+  if (idx === -1) return;
+
+  records[idx].foto_despues = currentPhotoData.sub;
+  records[idx].observacion_despues = obs;
+  records[idx].fecha_despues = new Date().toLocaleString('es-CL');
+  records[idx].estado = 'Subsanado';
+
+  saveRecords();
+  closeModal('modal-subsanacion');
+  renderPendientes();
+  updateStats();
+
+  const sent = await sendToSheet(records[idx], 'update');
+  if (sent) {
+    records[idx].synced = true;
+    saveRecords();
+    toast('✅ Subsanación registrada y sincronizada', 'ok');
+  } else {
+    offlineQueue.push({action: 'update', data: records[idx]});
+    localStorage.setItem('offline_queue', JSON.stringify(offlineQueue));
+    updateQueueIndicator();
+    toast('💾 Subsanación guardada (sin conexión)', 'ok');
+  }
+}
+
+// ==================== REGISTROS ====================
+function renderRegistros() {
+  const search = document.getElementById('reg-search').value.toLowerCase();
+  const filterEstado = document.getElementById('reg-filter-estado').value;
+  const filterEstab = document.getElementById('reg-filter-estab').value;
+
+  let list = [...records].reverse();
+  if (filterEstado) list = list.filter(r => r.estado === filterEstado);
+  if (filterEstab) list = list.filter(r => r.establecimiento === filterEstab);
+  if (search) list = list.filter(r =>
+    r.establecimiento.toLowerCase().includes(search) ||
+    r.categoria.toLowerCase().includes(search) ||
+    r.observacion_antes.toLowerCase().includes(search)
+  );
+
+  const container = document.getElementById('registros-list');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty"><div class="ico">📋</div><p>No hay registros</p></div>';
+    return;
+  }
+
+  container.innerHTML = list.map(r => `
+    <div class="record-item" onclick="openDetalleModal('${r.id}')">
+      <div class="record-header">
+        <div style="flex:1">
+          <div class="record-name">${r.establecimiento}</div>
+          <div class="record-meta">${r.categoria}</div>
+          <div style="margin-top:6px">
+            <span class="badge ${r.estado === 'Pendiente' ? 'badge-pending' : 'badge-done'}">${r.estado === 'Pendiente' ? '⏳' : '✅'} ${r.estado}</span>
+            ${!r.synced ? '<span style="font-size:11px;color:var(--muted);margin-left:4px">📵 local</span>' : ''}
+          </div>
+        </div>
+        ${r.foto_antes ? `<img src="${r.foto_antes}" class="record-thumb">` : '<div class="record-thumb-placeholder">📷</div>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openDetalleModal(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+
+  document.getElementById('modal-det-content').innerHTML = `
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">${r.establecimiento}</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:4px">${r.categoria}</p>
+    <div style="margin-bottom:12px">
+      <span class="badge ${r.estado === 'Pendiente' ? 'badge-pending' : 'badge-done'}">${r.estado === 'Pendiente' ? '⏳' : '✅'} ${r.estado}</span>
+    </div>
+
+    <div class="card" style="padding:12px;margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:8px">📷 Antes — ${r.fecha_antes}</div>
+      ${r.foto_antes ? `<img src="${r.foto_antes}" style="width:100%;border-radius:8px;max-height:220px;object-fit:cover;margin-bottom:8px">` : ''}
+      <p style="font-size:13px;color:var(--muted)">${r.observacion_antes}</p>
+    </div>
+
+    ${r.estado === 'Subsanado' ? `
+    <div class="card" style="padding:12px;margin-bottom:12px;border-color:var(--ok)">
+      <div class="card-title" style="margin-bottom:8px;color:var(--ok)">✅ Después — ${r.fecha_despues}</div>
+      ${r.foto_despues ? `<img src="${r.foto_despues}" style="width:100%;border-radius:8px;max-height:220px;object-fit:cover;margin-bottom:8px">` : ''}
+      <p style="font-size:13px;color:var(--muted)">${r.observacion_despues}</p>
+    </div>
+    ` : `
+    <button class="btn btn-primary mb-3" onclick="closeModal('modal-detalle');setTimeout(()=>openSubsanacionModal('${r.id}'),100)">✅ Registrar Subsanación</button>
+    `}
+
+    <button class="btn btn-danger btn-sm" onclick="eliminarRegistro('${r.id}')">🗑 Eliminar Registro</button>
+    <button class="btn btn-ghost mt-3" onclick="closeModal('modal-detalle')">Cerrar</button>
+  `;
+
+  openModal('modal-detalle');
+}
+
+function eliminarRegistro(id) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  records = records.filter(r => r.id !== id);
+  saveRecords();
+  closeModal('modal-detalle');
+  renderRegistros();
+  updateStats();
+  toast('🗑 Registro eliminado', 'ok');
+}
+
+// ==================== SYNC ====================
+async function sendToSheet(record, action = 'nuevo') {
+  if (!config.url) return false;
+  try {
+    const payload = {
+      action,
+      id: record.id,
+      establecimiento: record.establecimiento,
+      categoria: record.categoria,
+      foto_antes: record.foto_antes,
+      observacion_antes: record.observacion_antes,
+      fecha_antes: record.fecha_antes,
+      foto_despues: record.foto_despues || '',
+      observacion_despues: record.observacion_despues || '',
+      fecha_despues: record.fecha_despues || '',
+      estado: record.estado,
+      prioridad: record.prioridad || 'Normal',
+      drive_id: config.drive || ''
+    };
+
+    const res = await fetch(config.url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    return data.status === 'ok';
+  } catch (e) {
+    return false;
+  }
+}
+
+async function syncQueue() {
+  if (!offlineQueue.length || !config.url) {
+    if (offlineQueue.length && !config.url) toast('⚠️ Configura la URL del Web App primero', 'err');
+    return;
+  }
+  toast('🔄 Sincronizando ' + offlineQueue.length + ' registros...', 'ok');
+
+  const failed = [];
+  for (const item of offlineQueue) {
+    const sent = await sendToSheet(item.data, item.action);
+    if (sent) {
+      const idx = records.findIndex(r => r.id === item.data.id);
+      if (idx !== -1) { records[idx].synced = true; }
+    } else {
+      failed.push(item);
+    }
+  }
+  offlineQueue = failed;
+  localStorage.setItem('offline_queue', JSON.stringify(offlineQueue));
+  saveRecords();
+  updateQueueIndicator();
+  updateStats();
+
+  const synced = offlineQueue.length === 0;
+  toast(synced ? '✅ Todo sincronizado' : `⚠️ ${failed.length} sin sincronizar`, synced ? 'ok' : 'err');
+}
+
+// ==================== HELPERS ====================
+function saveRecords() {
+  localStorage.setItem('lev_records', JSON.stringify(records));
+  renderRegistros();
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent = records.length;
+  document.getElementById('stat-pending').textContent = records.filter(r => r.estado === 'Pendiente').length;
+  document.getElementById('stat-done').textContent = records.filter(r => r.estado === 'Subsanado').length;
+  document.getElementById('stat-queue').textContent = offlineQueue.length;
+}
+
+function updateQueueIndicator() {
+  const el = document.getElementById('queue-indicator');
+  if (offlineQueue.length > 0) {
+    el.style.display = 'flex';
+    el.innerHTML = `<span class="queue-dot"></span> ${offlineQueue.length} pendiente${offlineQueue.length > 1 ? 's' : ''}`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+let toastTimer;
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  const ico = document.getElementById('toast-ico');
+  const msgEl = document.getElementById('toast-msg');
+  el.className = 'show ' + type;
+  ico.textContent = type === 'ok' ? '✅' : '❌';
+  msgEl.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+</script>
+
+<!-- PWA Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
