@@ -1,22 +1,22 @@
 // sw.js — Service Worker para LevantApp PWA
-const CACHE = 'levantapp-v1';
-const ASSETS = ['/', '/index.html'];
+const CACHE_VERSION = 'levantapp-v3';
+const CACHE_ASSETS = ['/levantamiento-colegios/', '/levantamiento-colegios/index.html'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE_VERSION).then(c => c.addAll(CACHE_ASSETS)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    Promise.all(keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k)))
   ));
   self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('script.google.com')) return; // No cachear peticiones al backend
+  if (e.request.url.includes('script.google.com')) return;
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/index.html')))
+    caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });
