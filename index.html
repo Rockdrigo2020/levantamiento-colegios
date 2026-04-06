@@ -429,7 +429,6 @@
   </button>
 </nav>
 
-<!-- ===================== DASHBOARD ===================== -->
 <main id="tab-content-dashboard">
   <div class="card">
     <div class="card-title">📊 Resumen General</div>
@@ -480,7 +479,6 @@
   </div>
 </main>
 
-<!-- ===================== LEVANTAMIENTO ===================== -->
 <main id="tab-content-levantamiento" style="display:none">
   <div class="card">
     <div class="card-title">🏫 Establecimiento</div>
@@ -489,8 +487,7 @@
       <select id="lev-establecimiento" onchange="checkNewEstab()">
         <option value="">— Elige un establecimiento —</option>
         <option value="__nuevo__">➕ Agregar nuevo establecimiento...</option>
-        <!-- Established options injected by JS -->
-      </select>
+        </select>
     </div>
     <div id="nuevo-estab-section" style="display:none" class="mb-3">
       <label>Nombre del nuevo establecimiento</label>
@@ -559,7 +556,6 @@
   </button>
 </main>
 
-<!-- ===================== SUBSANACIÓN ===================== -->
 <main id="tab-content-subsanacion" style="display:none">
   <div class="card">
     <div class="card-title">🔍 Filtrar Pendientes</div>
@@ -581,7 +577,6 @@
   </div>
 </main>
 
-<!-- ===================== REGISTROS ===================== -->
 <main id="tab-content-registros" style="display:none">
   <div class="card">
     <div class="card-title">📋 Todos los Registros</div>
@@ -603,7 +598,6 @@
   <div id="registros-list"></div>
 </main>
 
-<!-- ===================== MODAL SUBSANACIÓN ===================== -->
 <div class="modal-overlay" id="modal-subsanacion">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -611,7 +605,6 @@
   </div>
 </div>
 
-<!-- ===================== MODAL DETALLE ===================== -->
 <div class="modal-overlay" id="modal-detalle">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -631,7 +624,9 @@ const ESTABLECIMIENTOS = ["Alhuelemu","CENTRO DE EDUCACIÓN DE ADULTOS ADELAIDA 
 let extraEstabs = JSON.parse(localStorage.getItem('extra_estabs') || '[]');
 let records = JSON.parse(localStorage.getItem('lev_records') || '[]');
 let offlineQueue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
-let config = JSON.parse(localStorage.getItem('lev_config') || '{"https://script.google.com/macros/s/AKfycbxDmcIlstTvkW0ECsNu0-J-zSrKJV34rTj0uZFY8GVEeQJOl_IuOn-t5KTsbOxbU_eACQ/exec":"","1xhW2XPSJCgq0zhduvYroCc2lEVJX0fsu":""}');
+// FIX 1: Variable de configuración corregida (Error 3)
+let config = JSON.parse(localStorage.getItem('lev_config') || '{"url":"","drive":""}');
+
 let currentPhotoData = {lev: null, sub: null};
 let currentEditId = null;
 let isDark = localStorage.getItem('theme') !== 'light';
@@ -1032,6 +1027,7 @@ function eliminarRegistro(id) {
 }
 
 // ==================== SYNC ====================
+// FIX 2: Cabecera Content-Type modificada a 'text/plain' para evitar errores CORS (Error 2)
 async function sendToSheet(record, action = 'nuevo') {
   if (!config.url) return false;
   try {
@@ -1053,12 +1049,20 @@ async function sendToSheet(record, action = 'nuevo') {
 
     const res = await fetch(config.url, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'text/plain'},
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
-    return data.status === 'ok';
+    
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return data.status === 'ok';
+    } catch(e) {
+      console.warn("GAS devolvió una respuesta no válida:", text.substring(0,100));
+      return false;
+    }
   } catch (e) {
+    console.error("Error enviando datos:", e);
     return false;
   }
 }
@@ -1135,7 +1139,6 @@ function toast(msg, type = 'ok') {
 }
 </script>
 
-<!-- PWA Service Worker Registration -->
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
