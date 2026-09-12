@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>LevantApp — SLEP Puelche</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" media="print" onload="this.media='all'">
+<style>
+
+  :root {
+    --accent: #f59e0b;
+    --accent-dark: #d97706;
+    --ok: #10b981;
+    --danger: #ef4444;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --border: #334155;
+  }
+  .light {
+    --bg: #f1f5f9;
+    --surface: #ffffff;
+    --surface2: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #cbd5e1;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    transition: background .2s, color .2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .logo-text { font-weight: 700; font-size: 15px; line-height: 1.1; }
+  .logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; }
+
+  /* Nav tabs */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex: 1;
+    min-width: 90px;
+    padding: 12px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all .15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-btn .tab-ico { font-size: 18px; }
+
+  /* Main */
+  main { padding: 16px; max-width: 640px; margin: 0 auto; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Form controls */
+  label { font-size: 13px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 4px; }
+  select, input[type=text], textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color .15s;
+    -webkit-appearance: none;
+  }
+  select:focus, input[type=text]:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  textarea { min-height: 90px; resize: vertical; }
+
+  /* Buttons */
+  .btn {
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 14px 20px;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: inherit;
+    width: 100%;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-success { background: var(--ok); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-ghost {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  .btn-sm { padding: 10px 14px; font-size: 13px; }
+
+  /* Photo capture */
+  .photo-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .photo-zone:hover, .photo-zone.drag { border-color: var(--accent); background: rgba(245,158,11,.05); }
+  .photo-zone img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    position: absolute; top: 0; left: 0;
+  }
+  .photo-zone .photo-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,.6);
+    padding: 6px;
+    font-size: 12px;
+    text-align: center;
+    color: #fff;
+  }
+  .photo-zone .ico { font-size: 36px; }
+  .photo-zone p { font-size: 13px; color: var(--muted); }
+  input[type=file] { display: none; }
+
+  /* Status badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-pending { background: rgba(245,158,11,.15); color: var(--accent); }
+  .badge-done { background: rgba(16,185,129,.15); color: var(--ok); }
+
+  /* Record card */
+  .record-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .15s, transform .1s;
+  }
+  .record-item:active { transform: scale(.99); }
+  .record-item:hover { border-color: var(--accent); }
+  .record-item.selected { border-color: var(--accent); background: rgba(245,158,11,.04); }
+
+  .record-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .record-name { font-weight: 700; font-size: 14px; flex: 1; margin-right: 8px; }
+  .record-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .record-thumb {
+    width: 56px; height: 56px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .record-thumb-placeholder {
+    width: 56px; height: 56px;
+    background: var(--surface2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(120px);
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    z-index: 999;
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    max-width: 90vw;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: var(--ok); }
+  #toast.err { border-color: var(--danger); }
+
+  /* Loading spinner */
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Offline indicator */
+  #offline-bar {
+    background: var(--danger);
+    color: #fff;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px;
+    display: none;
+  }
+  #offline-bar.show { display: block; }
+
+  /* Stats */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-box {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-num { font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 20px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90dvh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+  .empty .ico { font-size: 48px; margin-bottom: 12px; }
+
+  /* Search input */
+  .search-wrap { position: relative; }
+  .search-wrap input { padding-left: 38px; }
+  .search-ico {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  /* Queue indicator */
+  .queue-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-left: 4px;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  .mb-3 { margin-bottom: 12px; }
+  .mt-3 { margin-top: 12px; }
+  .gap-2 { gap: 8px; }
+  .flex { display: flex; }
+  .flex-col { flex-direction: column; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+<style>
+  /* --- v5: pantallas nuevas --- */
+  .screen { display:none } .screen.on { display:block }
+  .login-wrap { max-width:380px; margin:0 auto; padding:48px 20px }
+  .step { display:none } .step.on { display:block }
+  .step-bar { display:flex; gap:4px; margin-bottom:16px }
+  .step-dot { flex:1; height:4px; border-radius:2px; background:var(--surface2) }
+  .step-dot.done { background:var(--accent) }
+  .opt-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px }
+  .opt { padding:14px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface);
+         text-align:center; font-size:13px; font-weight:600; cursor:pointer; line-height:1.3 }
+  .opt.sel { border-color:var(--accent); background:rgba(245,158,11,.12); color:var(--accent) }
+  .opt-list .opt { text-align:left; padding:12px 14px }
+  .opt-list { display:flex; flex-direction:column; gap:6px; max-height:46vh; overflow-y:auto }
+  .btn-emerg { background:var(--danger); color:#fff; font-weight:800; letter-spacing:.4px }
+  .chip { display:inline-block; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:700;
+          background:var(--surface2); color:var(--muted); margin-right:4px }
+  .chip-alta { background:rgba(239,68,68,.18); color:#ef4444 }
+  .chip-media { background:rgba(245,158,11,.18); color:#f59e0b }
+  .chip-baja { background:rgba(148,163,184,.18); color:#94a3b8 }
+  .chip-eval { background:rgba(99,102,241,.18); color:#818cf8 }
+  .chip-emg { background:var(--danger); color:#fff }
+  .mat-row { display:grid; grid-template-columns:1fr 70px 34px; gap:6px; align-items:center; margin-bottom:6px }
+  .crumb { font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.5 }
+  .crumb b { color:var(--text); font-weight:600 }
+  .tab-bar { display:flex; overflow-x:auto; gap:4px; padding:0 12px 10px }
+  .tab-bar::-webkit-scrollbar { display:none }
+  /* el CSS base solo estiliza input[type=text]: extendemos a los tipos nuevos */
+  input[type=password], input[type=url], input[type=number] {
+    width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:15px; font-family:inherit; outline:none;
+  }
+  input[type=password]:focus, input[type=url]:focus, input[type=number]:focus { border-color:var(--accent) }
+  .btn-icon { background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; padding:6px }
+  .btn-icon:hover { color:var(--text) }
+  .queue-ind { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
+               color:var(--accent); background:rgba(245,158,11,.12); padding:4px 9px; border-radius:99px }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="screen-login" class="screen on">
+  <div class="login-wrap">
+    <div class="logo" style="justify-content:center;margin-bottom:8px">
+      <div class="logo-icon">🏫</div>
+      <div><div class="logo-text">LevantApp</div><div class="logo-sub">SLEP Puelche</div></div>
+    </div>
+    <div class="card" style="padding:20px">
+      <div class="mb-3">
+        <label>Usuario</label>
+        <input type="text" id="log-user" autocomplete="username" autocapitalize="none">
+      </div>
+      <div class="mb-3">
+        <label>Clave</label>
+        <input type="password" id="log-pass" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" id="btn-login" onclick="hacerLogin()">Ingresar</button>
+      <p id="log-msg" style="font-size:12px;color:var(--danger);margin-top:10px;text-align:center"></p>
+    </div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">
+      Primer ingreso requiere conexión. Después funciona sin internet.
+    </p>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="screen-app" class="screen">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🏫</div>
+      <div><div class="logo-text">LevantApp</div><div class="logo-sub" id="hdr-user">—</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="queue-indicator" class="queue-ind" style="display:none"></div>
+      <button class="btn-icon" id="theme-btn" onclick="toggleTheme()">🌙</button>
+      <button class="btn-icon" onclick="cerrarSesion()" title="Salir">⏻</button>
+    </div>
+  </header>
+
+  <div id="offline-bar" class="offline-bar">⚡ Sin conexión — los datos se guardan en el equipo</div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-dashboard" onclick="showTab('dashboard')">Inicio</button>
+    <button class="tab-btn" id="tab-levantamiento" onclick="showTab('levantamiento')">Levantar</button>
+    <button class="tab-btn" id="tab-subsanacion" onclick="showTab('subsanacion')">Subsanar</button>
+    <button class="tab-btn" id="tab-registros" onclick="showTab('registros')">Tickets</button>
+  </div>
+
+  <main>
+    <!-- ---------- INICIO ---------- -->
+    <div id="tab-content-dashboard">
+      <button class="btn btn-emerg mb-3" onclick="abrirEmergencia()">🚨 TRABAJOS DE EMERGENCIA</button>
+
+      <div class="stat-grid mb-3">
+        <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Tickets</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">Pendientes</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-done">0</div><div class="stat-label">Cerrados</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-queue">0</div><div class="stat-label">Por enviar</div></div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-title">Prioridades abiertas</div>
+        <div id="resumen-prioridad" style="font-size:13px;color:var(--muted)">—</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Conexión</div>
+        <div class="mb-3">
+          <label>URL del Google Apps Script (/exec)</label>
+          <input type="url" id="config-url" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="guardarConfig()">Guardar</button>
+        <button class="btn btn-ghost btn-sm mt-3" onclick="sincronizarTodo()">🔄 Sincronizar ahora</button>
+      </div>
+    </div>
+
+    <!-- ---------- LEVANTAMIENTO (7 pasos) ---------- -->
+    <div id="tab-content-levantamiento" style="display:none">
+      <div class="step-bar" id="step-bar"></div>
+      <div class="crumb" id="lev-crumb"></div>
+
+      <div class="step on" data-step="1">
+        <div class="card-title mb-3">Paso 1 · Comuna</div>
+        <div class="opt-grid" id="lista-comunas"></div>
+      </div>
+      <div class="step" data-step="2">
+        <div class="card-title mb-3">Paso 2 · Establecimiento</div>
+        <div class="search-wrap mb-3"><span class="search-ico">🔎</span>
+          <input type="text" id="busca-estab" placeholder="Buscar..." oninput="pintarEstabs()"></div>
+        <div class="opt-list" id="lista-estabs"></div>
+      </div>
+      <div class="step" data-step="3">
+        <div class="card-title mb-3">Paso 3 · Recinto</div>
+        <div class="opt-list mb-3" id="lista-recintos"></div>
+        <label>Nombre del espacio (opcional)</label>
+        <input type="text" id="lev-nombre-espacio" placeholder="Ej: Sala 2, Cocina de profesores">
+      </div>
+      <div class="step" data-step="4">
+        <div class="card-title mb-3">Paso 4 · Elemento general</div>
+        <div class="opt-grid" id="lista-generales"></div>
+      </div>
+      <div class="step" data-step="5">
+        <div class="card-title mb-3">Paso 5 · Elemento específico</div>
+        <div class="opt-list" id="lista-especificos"></div>
+      </div>
+      <div class="step" data-step="6">
+        <div class="card-title mb-3">Paso 6 · Descripción</div>
+        <textarea id="lev-obs" placeholder="Describe la falla observada..."></textarea>
+        <div id="lev-prioridad-box" class="mt-3" style="display:none">
+          <label>Prioridad</label>
+          <select id="lev-prioridad"><option>Alta</option><option selected>Media</option><option>Baja</option></select>
+        </div>
+        <p id="lev-prioridad-nota" style="font-size:12px;color:var(--muted);margin-top:8px;display:none">
+          Tu ticket quedará <b>Por evaluar</b>. Infraestructura asigna la prioridad.
+        </p>
+      </div>
+      <div class="step" data-step="7">
+        <div class="card-title mb-3">Paso 7 · Fotografía del estado actual</div>
+        <div class="photo-zone" id="lev-photo-zone" onclick="document.getElementById('lev-file').click()">
+          <div class="ico">📸</div><p>Toca para tomar foto</p>
+        </div>
+        <input type="file" id="lev-file" accept="image/*" capture="environment" onchange="handlePhoto('lev',this)">
+        <div class="grid-2 mt-3">
+          <button class="btn btn-ghost btn-sm" onclick="abrirFoto('lev-file',false)">🖼 Galería</button>
+          <button class="btn btn-ghost btn-sm" onclick="abrirFoto('lev-file',true)">📷 Cámara</button>
+        </div>
+        <button class="btn btn-primary mt-3" id="lev-submit" onclick="guardarLevantamiento()">💾 Generar ticket</button>
+      </div>
+
+      <div class="grid-2 mt-3">
+        <button class="btn btn-ghost" id="btn-atras" onclick="paso(-1)">← Atrás</button>
+        <button class="btn btn-primary" id="btn-siguiente" onclick="paso(1)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- ---------- SUBSANACIÓN ---------- -->
+    <div id="tab-content-subsanacion" style="display:none">
+      <div class="search-wrap mb-3"><span class="search-ico">🔎</span>
+        <input type="text" id="sub-search" placeholder="Buscar ticket, colegio o falla..." oninput="renderPendientes()"></div>
+      <select id="sub-filter-estab" class="mb-3" onchange="renderPendientes()"><option value="">Todos los establecimientos</option></select>
+      <div id="pendientes-list"></div>
+    </div>
+
+    <!-- ---------- TICKETS ---------- -->
+    <div id="tab-content-registros" style="display:none">
+      <div class="search-wrap mb-3"><span class="search-ico">🔎</span>
+        <input type="text" id="reg-search" placeholder="Buscar..." oninput="renderRegistros()"></div>
+      <div class="grid-2 mb-3">
+        <select id="reg-filter-estado" onchange="renderRegistros()">
+          <option value="">Todo estado</option><option>Pendiente</option><option>En proceso</option>
+          <option>Cerrado</option><option>Rechazado</option></select>
+        <select id="reg-filter-estab" onchange="renderRegistros()"><option value="">Todo establ.</option></select>
+      </div>
+      <div id="registros-list"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ MODALES ============ -->
+<div class="modal-overlay" id="modal-emergencia"><div class="modal"><div class="modal-handle"></div>
+  <div id="modal-emg-content"></div></div></div>
+<div class="modal-overlay" id="modal-subsanacion"><div class="modal"><div class="modal-handle"></div>
+  <div id="modal-sub-content"></div></div></div>
+<div class="modal-overlay" id="modal-detalle"><div class="modal"><div class="modal-handle"></div>
+  <div id="modal-det-content"></div></div></div>
+
+<div id="toast"><span id="toast-ico"></span><span id="toast-msg"></span></div>
+
+<script>
+/* ==================================================================
+   LevantApp v5 — modelo relacional SLEP Puelche
+   Offline-first: catálogos y tickets en localStorage, fotos en IndexedDB,
+   cola de envío idempotente por id_local.
+   ================================================================== */
+
+// ==================== ESTADO ====================
+const LS = {
+  cfg:'lev_config', ses:'lev_sesion', cat:'lev_catalogos',
+  obs:'lev_obs', sub:'lev_sub', cola:'lev_cola', tema:'theme'
+};
+const leerLS = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch(e) { return def; } };
+
+// URL del servidor ya desplegado. Si algun dia rehaces la implementacion en
+// Apps Script, cambia esta linea (y borra los datos del sitio en el celular).
+const SERVIDOR = 'https://script.google.com/macros/s/AKfycbwQylH5dZ_LZXDARGbZY05T65d4O8pX4L4IU2LoObhsedCkXP_dcp9V6dsLCQ1vRKbh/exec';
+let config   = leerLS(LS.cfg, {url: SERVIDOR});
+if (!config.url) config.url = SERVIDOR;
+let sesion   = leerLS(LS.ses, null);
+let cat      = leerLS(LS.cat, null);
+let obs      = leerLS(LS.obs, []);
+let subs     = leerLS(LS.sub, []);
+let cola     = leerLS(LS.cola, []);
+let isDark   = localStorage.getItem(LS.tema) !== 'light';
+
+let currentPhotoData = {lev:null, sub:null, emg:null};
+let borrador = {};          // levantamiento en curso
+let pasoActual = 1;
+let subActual  = null;      // ticket que se está subsanando
+let matSel     = [];        // materiales de la subsanación en curso
+
+// ==================== UTILIDADES ====================
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function uid(p) {
+  const r = (crypto && crypto.randomUUID) ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+  return p + '_' + r;
+}
+function guardar(k, v) {
+  try { localStorage.setItem(k, JSON.stringify(v)); }
+  catch(e) { console.error('localStorage lleno', e); toast('Almacenamiento lleno: sincroniza y libera espacio','err'); }
+}
+const fechaCL = d => new Date(d || Date.now()).toLocaleString('es-CL');
+
+// ==================== IndexedDB (fotos como Blob) ====================
+const IDB_NAME='levantapp', IDB_STORE='photos';
+let _dbp=null;
+function idb(){
+  if(_dbp) return _dbp;
+  _dbp = new Promise((res,rej)=>{
+    const q = indexedDB.open(IDB_NAME,1);
+    q.onupgradeneeded=()=>{ const db=q.result; if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE); };
+    q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);
+  });
+  return _dbp;
+}
+function idbPut(k,b){ return idb().then(db=>new Promise((res,rej)=>{
+  const tx=db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).put(b,k);
+  tx.oncomplete=()=>res(k); tx.onerror=()=>rej(tx.error); })); }
+function idbGet(k){ if(!k) return Promise.resolve(null); return idb().then(db=>new Promise((res,rej)=>{
+  const tx=db.transaction(IDB_STORE,'readonly'); const r=tx.objectStore(IDB_STORE).get(k);
+  r.onsuccess=()=>res(r.result||null); r.onerror=()=>rej(r.error); })); }
+function idbDel(k){ if(!k) return Promise.resolve(); return idb().then(db=>new Promise(res=>{
+  const tx=db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).delete(k);
+  tx.oncomplete=res; tx.onerror=res; })); }
+
+const _urlCache = new Map();
+function photoURL(id){
+  if(!id) return Promise.resolve(null);
+  if(/^https?:/.test(id)) return Promise.resolve(id);          // ya subida a Drive
+  if(_urlCache.has(id)) return Promise.resolve(_urlCache.get(id));
+  return idbGet(id).then(b=>{ if(!b) return null; const u=URL.createObjectURL(b); _urlCache.set(id,u); return u; });
+}
+function hydratePhotos(root){
+  (root||document).querySelectorAll('img[data-ph]').forEach(img=>{
+    const id=img.getAttribute('data-ph'); img.removeAttribute('data-ph');
+    photoURL(id).then(u=>{ if(u) img.src=u; else img.style.display='none'; });
+  });
+}
+const blobToB64 = b => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(b); });
+
+// ==================== LOGIN ====================
+async function hacerLogin() {
+  const usuario = document.getElementById('log-user').value.trim();
+  const clave   = document.getElementById('log-pass').value;
+  const msg     = document.getElementById('log-msg');
+  const btn     = document.getElementById('btn-login');
+  msg.textContent = '';
+
+  if (!usuario || !clave) { msg.textContent = 'Escribe usuario y clave'; return; }
+
+  // Reingreso sin conexión: si ya entró antes en este equipo, se permite
+  if (!navigator.onLine) {
+    if (sesion && sesion.usuario_login === usuario.toLowerCase()) { entrarApp(); return; }
+    msg.textContent = 'Sin conexión: el primer ingreso requiere internet';
+    return;
+  }
+  if (!config.url) { msg.textContent = 'Falta configurar la URL del servidor'; return; }
+
+  btn.innerHTML = '<div class="spinner"></div> Verificando...'; btn.disabled = true;
+  const r = await api({action:'login', usuario, clave});
+  btn.innerHTML = 'Ingresar'; btn.disabled = false;
+
+  if (!r || r.status !== 'ok') { msg.textContent = (r && r.message) || 'No se pudo conectar'; return; }
+  sesion = Object.assign({usuario_login: usuario.toLowerCase()}, r.usuario);
+  guardar(LS.ses, sesion);
+  await bajarCatalogos();
+  entrarApp();
+}
+
+function cerrarSesion() {
+  if (cola.length && !confirm('Tienes ' + cola.length + ' registro(s) sin enviar. ¿Salir igual?')) return;
+  sesion = null; localStorage.removeItem(LS.ses);
+  document.getElementById('screen-app').classList.remove('on');
+  document.getElementById('screen-login').classList.add('on');
+  document.getElementById('log-pass').value = '';
+}
+
+function entrarApp() {
+  document.getElementById('screen-login').classList.remove('on');
+  document.getElementById('screen-app').classList.add('on');
+  document.getElementById('hdr-user').textContent = sesion.nombre + ' · ' + sesion.perfil;
+  // El Maestro no levanta observaciones nuevas, solo subsana
+  document.getElementById('tab-levantamiento').style.display = sesion.perfil === 'Maestro' ? 'none' : '';
+  // El Director no subsana
+  document.getElementById('tab-subsanacion').style.display  = sesion.perfil === 'Director' ? 'none' : '';
+  iniciarLevantamiento();
+  refrescarTodo();
+  if (navigator.onLine) sincronizarTodo(true);
+}
+
+// ==================== API ====================
+async function api(payload, timeoutMs = 60000) {
+  if (!config.url) return null;
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(config.url, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},   // evita el preflight CORS que GAS no responde
+      body: JSON.stringify(payload), redirect:'follow', signal: ctrl.signal
+    });
+    const txt = await res.text();
+    try { return JSON.parse(txt); }
+    catch(e){ console.warn('respuesta no JSON:', txt.slice(0,200)); return null; }
+  } catch(e) {
+    if (e.name === 'AbortError') console.warn('timeout en', payload.action);
+    else console.error('api:', e);
+    return null;
+  } finally { clearTimeout(t); }
+}
+
+async function bajarCatalogos() {
+  const r = await api({action:'catalogos'});
+  if (r && r.status === 'ok') { cat = r; guardar(LS.cat, cat); }
+  return cat;
+}
+
+// ==================== CATÁLOGOS: consultas ====================
+const nomComuna = id => (cat?.comunas||[]).find(c=>c.id_comuna==id)?.nombre || '';
+const objEstab  = id => (cat?.establecimientos||[]).find(e=>e.id_establecimiento==id);
+const nomEstab  = id => objEstab(id)?.nombre || id || '';
+const nomRecinto= id => { const r=(cat?.recintos||[]).find(x=>x.id_recinto==id);
+                          return r ? (r.nombre_espacio ? r.tipo_espacio+' — '+r.nombre_espacio : r.tipo_espacio) : ''; };
+const objEspec  = id => (cat?.especificos||[]).find(e=>e.id_especifico==id);
+const nomEspec  = id => objEspec(id)?.nombre || '';
+const nomGeneral= id => (cat?.generales||[]).find(g=>g.id_general==id)?.nombre || '';
+const nomMat    = id => (cat?.materiales||[]).find(m=>m.id_material==id)?.nombre || id;
+const uniMat    = id => (cat?.materiales||[]).find(m=>m.id_material==id)?.unidad || '';
+function accionesDe(idEspec) {
+  const a = (cat?.acciones||[]).filter(x=>x.id_especifico==idEspec);
+  const otras = (cat?.acciones||[]).filter(x=>!x.id_especifico);
+  return a.concat(otras);
+}
+
+// ==================== LEVANTAMIENTO: wizard de 7 pasos ====================
+function iniciarLevantamiento() {
+  borrador = {id_local: uid('OBS')};
+  currentPhotoData.lev = null;
+  pasoActual = 1;
+  // El Director trabaja siempre sobre su propio establecimiento: se saltan los pasos 1 y 2
+  if (sesion && sesion.perfil === 'Director' && sesion.id_establecimiento) {
+    const e = objEstab(sesion.id_establecimiento);
+    borrador.id_establecimiento = sesion.id_establecimiento;
+    if (e) borrador.id_comuna = e.id_comuna;
+    pasoActual = 3;
+  }
+  document.getElementById('lev-obs').value = '';
+  document.getElementById('lev-nombre-espacio').value = '';
+  document.getElementById('lev-photo-zone').innerHTML = '<div class="ico">📸</div><p>Toca para tomar foto</p>';
+  pintarComunas(); pintarEstabs(); pintarRecintos(); pintarGenerales();
+  mostrarPaso();
+}
+
+function mostrarPaso() {
+  document.querySelectorAll('#tab-content-levantamiento .step').forEach(s=>{
+    s.classList.toggle('on', +s.dataset.step === pasoActual);
+  });
+  document.getElementById('step-bar').innerHTML =
+    [1,2,3,4,5,6,7].map(i=>`<div class="step-dot ${i<=pasoActual?'done':''}"></div>`).join('');
+  document.getElementById('btn-siguiente').style.display = pasoActual === 7 ? 'none' : '';
+  const primerPaso = (sesion && sesion.perfil==='Director' && sesion.id_establecimiento) ? 3 : 1;
+  document.getElementById('btn-atras').style.visibility = pasoActual > primerPaso ? '' : 'hidden';
+
+  // Prioridad: solo Infraestructura la asigna al registrar
+  const infra = sesion && sesion.perfil === 'Infraestructura';
+  document.getElementById('lev-prioridad-box').style.display  = infra ? '' : 'none';
+  document.getElementById('lev-prioridad-nota').style.display = infra ? 'none' : '';
+
+  document.getElementById('lev-crumb').innerHTML = [
+    borrador.id_comuna ? '<b>'+esc(nomComuna(borrador.id_comuna))+'</b>' : '',
+    borrador.id_establecimiento ? esc(nomEstab(borrador.id_establecimiento)) : '',
+    borrador.id_recinto ? esc(nomRecinto(borrador.id_recinto)) : '',
+    borrador.id_general ? esc(nomGeneral(borrador.id_general)) : '',
+    borrador.id_especifico ? '<b>'+esc(nomEspec(borrador.id_especifico))+'</b>' : ''
+  ].filter(Boolean).join(' › ');
+}
+
+function paso(delta) {
+  if (delta > 0) {
+    const falta = {
+      1:[borrador.id_comuna,'Selecciona una comuna'],
+      2:[borrador.id_establecimiento,'Selecciona un establecimiento'],
+      3:[borrador.id_recinto,'Selecciona un recinto'],
+      4:[borrador.id_general,'Selecciona el elemento general'],
+      5:[borrador.id_especifico,'Selecciona el elemento específico'],
+      6:[document.getElementById('lev-obs').value.trim(),'Describe la falla']
+    }[pasoActual];
+    if (falta && !falta[0]) { toast('⚠️ ' + falta[1], 'err'); return; }
+    if (pasoActual === 6) borrador.descripcion = document.getElementById('lev-obs').value.trim();
+  }
+  pasoActual = Math.min(7, Math.max(1, pasoActual + delta));
+  mostrarPaso();
+}
+
+function pintarComunas() {
+  document.getElementById('lista-comunas').innerHTML = (cat?.comunas||[]).map(c=>
+    `<div class="opt ${borrador.id_comuna==c.id_comuna?'sel':''}" onclick="elegirComuna('${esc(c.id_comuna)}')">${esc(c.nombre)}</div>`
+  ).join('') || '<p style="color:var(--muted)">Sin catálogo. Sincroniza con internet.</p>';
+}
+function elegirComuna(id){ borrador.id_comuna=id; borrador.id_establecimiento=null; borrador.id_recinto=null;
+  pintarComunas(); pintarEstabs(); mostrarPaso(); paso(1); }
+
+function pintarEstabs() {
+  const q = (document.getElementById('busca-estab').value||'').toLowerCase();
+  let lista = (cat?.establecimientos||[]).filter(e=>e.id_comuna==borrador.id_comuna);
+  if (q) lista = lista.filter(e=>String(e.nombre).toLowerCase().includes(q));
+  document.getElementById('lista-estabs').innerHTML = lista.map(e=>
+    `<div class="opt ${borrador.id_establecimiento==e.id_establecimiento?'sel':''}" onclick="elegirEstab('${esc(e.id_establecimiento)}')">
+       ${esc(e.nombre)}<div style="font-size:11px;color:var(--muted);font-weight:400">${esc(e.tipo||'')} ${e.rbd?'· RBD '+esc(e.rbd):''}</div>
+     </div>`).join('') || '<p style="color:var(--muted);padding:12px">Sin establecimientos en esta comuna.</p>';
+}
+function elegirEstab(id){ borrador.id_establecimiento=id; borrador.id_recinto=null;
+  pintarEstabs(); pintarRecintos(); mostrarPaso(); paso(1); }
+
+function pintarRecintos() {
+  const lista = (cat?.recintos||[]).filter(r=>r.id_establecimiento==borrador.id_establecimiento);
+  document.getElementById('lista-recintos').innerHTML = lista.map(r=>
+    `<div class="opt ${borrador.id_recinto==r.id_recinto?'sel':''}" onclick="elegirRecinto('${esc(r.id_recinto)}')">
+       ${esc(r.tipo_espacio)}${r.nombre_espacio?' — '+esc(r.nombre_espacio):''}</div>`
+  ).join('') || '<p style="color:var(--muted);padding:12px">Este establecimiento no tiene recintos cargados.</p>';
+}
+function elegirRecinto(id){ borrador.id_recinto=id; pintarRecintos(); mostrarPaso(); }
+
+function pintarGenerales() {
+  document.getElementById('lista-generales').innerHTML = (cat?.generales||[]).map(g=>
+    `<div class="opt ${borrador.id_general==g.id_general?'sel':''}" onclick="elegirGeneral('${esc(g.id_general)}')">${esc(g.nombre)}</div>`
+  ).join('');
+}
+function elegirGeneral(id){ borrador.id_general=id; borrador.id_especifico=null;
+  pintarGenerales(); pintarEspecificos(); mostrarPaso(); paso(1); }
+
+function pintarEspecificos() {
+  const lista = (cat?.especificos||[]).filter(e=>e.id_general==borrador.id_general);
+  document.getElementById('lista-especificos').innerHTML = lista.map(e=>
+    `<div class="opt ${borrador.id_especifico==e.id_especifico?'sel':''}" onclick="elegirEspecifico('${esc(e.id_especifico)}')">${esc(e.nombre)}</div>`
+  ).join('');
+}
+function elegirEspecifico(id){ borrador.id_especifico=id; pintarEspecificos(); mostrarPaso(); paso(1); }
+
+// ==================== FOTOS ====================
+function abrirFoto(inputId, camara) {
+  const el = document.getElementById(inputId);
+  if (camara) el.setAttribute('capture','environment'); else el.removeAttribute('capture');
+  el.click();
+}
+function handlePhoto(tipo, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const zone = document.getElementById(tipo + '-photo-zone');
+  if (zone) zone.innerHTML = '<div class="spinner"></div><p>Procesando...</p>';
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      const MAX = 1280;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = h*MAX/w; w = MAX; }
+      if (h > MAX) { w = w*MAX/h; h = MAX; }
+      c.width = Math.round(w); c.height = Math.round(h);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      // Blob binario, no base64: ~33% más liviano y va a IndexedDB
+      c.toBlob(async blob => {
+        if (!blob) { toast('No se pudo procesar la foto','err'); return; }
+        try {
+          const id = uid('ph');
+          await idbPut(id, blob);
+          currentPhotoData[tipo] = id;
+          const u = URL.createObjectURL(blob); _urlCache.set(id,u);
+          if (zone) zone.innerHTML = `<img src="${u}" alt="foto"><div class="photo-overlay">📷 Cambiar (${Math.round(blob.size/1024)} KB)</div>`;
+        } catch(err) { console.error(err); toast('Error guardando la foto','err'); }
+      }, 'image/jpeg', 0.72);
+    };
+    img.onerror = () => toast('Archivo de imagen inválido','err');
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ==================== GUARDAR LEVANTAMIENTO ====================
+async function guardarLevantamiento() {
+  if (!currentPhotoData.lev) { toast('⚠️ La fotografía es obligatoria','err'); return; }
+  borrador.descripcion = document.getElementById('lev-obs').value.trim();
+  if (!borrador.descripcion) { toast('⚠️ Falta la descripción','err'); pasoActual=6; mostrarPaso(); return; }
+
+  const infra = sesion.perfil === 'Infraestructura';
+  const nombreEspacio = document.getElementById('lev-nombre-espacio').value.trim();
+
+  const reg = {
+    id_local: borrador.id_local,
+    ticket: '',                                   // el correlativo lo asigna el servidor
+    id_establecimiento: borrador.id_establecimiento,
+    id_recinto: borrador.id_recinto,
+    nombre_espacio: nombreEspacio,
+    id_especifico: borrador.id_especifico,
+    descripcion: borrador.descripcion,
+    foto_antes: currentPhotoData.lev,
+    prioridad: infra ? document.getElementById('lev-prioridad').value : 'Por evaluar',
+    estado: 'Pendiente',
+    fecha_registro: new Date().toISOString(),
+    id_usuario_levanta: sesion.id_usuario,
+    es_emergencia: false,
+    synced: false
+  };
+  obs.push(reg); guardar(LS.obs, obs);
+  encolar('observacion', reg.id_local);
+
+  const btn = document.getElementById('lev-submit');
+  btn.innerHTML = '<div class="spinner"></div> Enviando...'; btn.disabled = true;
+  const ok = await enviarUno('observacion', reg.id_local);
+  btn.innerHTML = '💾 Generar ticket'; btn.disabled = false;
+
+  const r = obs.find(o=>o.id_local===reg.id_local);
+  toast(ok ? '✅ Ticket ' + r.ticket : '💾 Guardado, se enviará solo', 'ok');
+  iniciarLevantamiento();
+  refrescarTodo();
+  showTab('registros');
+}
+
+// ==================== EMERGENCIA ====================
+const TIPOS_EMERGENCIA = [
+  {k:'SIN LUZ',   d:'Corte total o parcial'},
+  {k:'SIN AGUA',  d:'Corte de suministro o bomba'},
+  {k:'FOSA SÉPTICA REBALSADA', d:'O alcantarillado colapsado'},
+  {k:'DAÑOS POR CLIMA', d:'Viento, lluvia, nieve, granizo'},
+  {k:'OTRO',      d:'Requiere descripción ampliada'}
+];
+
+function abrirEmergencia() {
+  currentPhotoData.emg = null;
+  const estabs = (cat?.establecimientos||[]);
+  const fijo = sesion.perfil === 'Director' && sesion.id_establecimiento;
+  document.getElementById('modal-emg-content').innerHTML = `
+    <h3 style="font-size:17px;font-weight:800;color:var(--danger);margin-bottom:4px">🚨 Trabajo de emergencia</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Se genera un ticket con prioridad ALTA automática.</p>
+
+    ${fijo ? `<div class="card" style="padding:10px;margin-bottom:12px">${esc(nomEstab(sesion.id_establecimiento))}</div>`
+           : `<div class="mb-3"><label>Establecimiento</label>
+                <select id="emg-estab"><option value="">Selecciona...</option>
+                ${estabs.map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('')}
+                </select></div>`}
+
+    <label>Tipo de emergencia</label>
+    <div class="opt-list mb-3" id="emg-tipos">
+      ${TIPOS_EMERGENCIA.map(t=>`<div class="opt" data-k="${esc(t.k)}" onclick="elegirEmg(this)">
+        ${esc(t.k)}<div style="font-size:11px;color:var(--muted);font-weight:400">${esc(t.d)}</div></div>`).join('')}
+    </div>
+
+    <div class="mb-3"><label>Descripción</label>
+      <textarea id="emg-obs" placeholder="Detalla la emergencia..."></textarea></div>
+
+    <div class="mb-3">
+      <div class="photo-zone" id="emg-photo-zone" onclick="document.getElementById('emg-file').click()">
+        <div class="ico">📸</div><p>Fotografía obligatoria</p></div>
+      <input type="file" id="emg-file" accept="image/*" capture="environment" onchange="handlePhoto('emg',this)">
+    </div>
+
+    <div class="mb-3"><label>¿Requiere suspender la continuidad de clases?</label>
+      <select id="emg-clases"><option value="No">No</option><option value="Si">Sí, se suspenden clases</option></select></div>
+
+    <button class="btn btn-danger" onclick="guardarEmergencia()">🚨 Generar ticket de emergencia</button>
+    <button class="btn btn-ghost mt-3" onclick="closeModal('modal-emergencia')">Cancelar</button>`;
+  openModal('modal-emergencia');
+}
+function elegirEmg(el) {
+  document.querySelectorAll('#emg-tipos .opt').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function guardarEmergencia() {
+  const tipoEl = document.querySelector('#emg-tipos .opt.sel');
+  const estab = (sesion.perfil==='Director' && sesion.id_establecimiento)
+    ? sesion.id_establecimiento : (document.getElementById('emg-estab')||{}).value;
+  const desc = document.getElementById('emg-obs').value.trim();
+
+  if (!estab)    { toast('⚠️ Selecciona el establecimiento','err'); return; }
+  if (!tipoEl)   { toast('⚠️ Selecciona el tipo de emergencia','err'); return; }
+  if (!desc)     { toast('⚠️ Describe la emergencia','err'); return; }
+  if (!currentPhotoData.emg) { toast('⚠️ La fotografía es obligatoria','err'); return; }
+
+  const clases = document.getElementById('emg-clases').value;
+  const reg = {
+    id_local: uid('EMG'), ticket:'',
+    id_establecimiento: estab, id_recinto:'', nombre_espacio:'', id_especifico:'',
+    descripcion: desc, foto_antes: currentPhotoData.emg,
+    prioridad:'Alta', estado:'Pendiente',
+    fecha_registro: new Date().toISOString(), id_usuario_levanta: sesion.id_usuario,
+    es_emergencia:true, tipo_emergencia: tipoEl.dataset.k, continuidad_clases: clases,
+    synced:false
+  };
+  obs.push(reg); guardar(LS.obs, obs);
+  encolar('observacion', reg.id_local);
+  closeModal('modal-emergencia');
+  const ok = await enviarUno('observacion', reg.id_local);
+  const r = obs.find(o=>o.id_local===reg.id_local);
+  toast(ok ? '🚨 Emergencia ' + r.ticket : '💾 Emergencia guardada, se enviará sola', 'ok');
+  if (clases === 'Si') toast('Se notificó la suspensión de clases a la Dirección','ok');
+  refrescarTodo();
+}
+
+// ==================== SUBSANACIÓN ====================
+function renderPendientes() {
+  const q = (document.getElementById('sub-search').value||'').toLowerCase();
+  const fe = document.getElementById('sub-filter-estab').value;
+  let lista = obs.filter(o=>o.estado==='Pendiente'||o.estado==='En proceso');
+  if (fe) lista = lista.filter(o=>o.id_establecimiento==fe);
+  if (q) lista = lista.filter(o=>
+    (o.ticket||'').toLowerCase().includes(q) ||
+    nomEstab(o.id_establecimiento).toLowerCase().includes(q) ||
+    (o.descripcion||'').toLowerCase().includes(q));
+
+  // Orden del diagrama: por prioridad y luego por antigüedad
+  const peso = {'Alta':0,'Media':1,'Por evaluar':2,'Baja':3};
+  lista.sort((a,b)=>(peso[a.prioridad]??9)-(peso[b.prioridad]??9) ||
+                    new Date(a.fecha_registro)-new Date(b.fecha_registro));
+
+  const c = document.getElementById('pendientes-list');
+  c.innerHTML = lista.length ? lista.map(tarjeta('openSubsanacionModal')).join('')
+    : '<div class="empty"><div class="ico">📭</div><p>No hay observaciones pendientes</p></div>';
+  hydratePhotos(c);
+}
+
+const chipPri = p => `<span class="chip chip-${(p||'').toLowerCase().replace('por evaluar','eval')}">${esc(p||'—')}</span>`;
+
+function tarjeta(fn) {
+  return o => `
+    <div class="record-item" onclick="${fn}('${esc(o.id_local)}')">
+      <div class="record-header">
+        <div style="flex:1">
+          <div class="record-name">${esc(nomEstab(o.id_establecimiento))}</div>
+          <div class="record-meta mono" style="font-size:11px">${esc(o.ticket||'sin ticket aún')}</div>
+          <div class="record-meta">${esc(nomRecinto(o.id_recinto)||o.tipo_emergencia||'—')} · ${esc(nomEspec(o.id_especifico)||'Emergencia')}</div>
+          <div style="margin-top:6px">
+            ${o.es_emergencia?'<span class="chip chip-emg">EMERGENCIA</span>':''}
+            ${chipPri(o.prioridad)}<span class="chip">${esc(o.estado)}</span>
+            ${!o.synced?'<span class="chip">📵 local</span>':''}
+          </div>
+        </div>
+        ${o.foto_antes?`<img data-ph="${esc(o.foto_antes)}" class="record-thumb" alt="">`:'<div class="record-thumb-placeholder">📷</div>'}
+      </div>
+    </div>`;
+}
+
+function openSubsanacionModal(idLocal) {
+  const o = obs.find(x=>x.id_local===idLocal);
+  if (!o) return;
+  subActual = idLocal; matSel = []; currentPhotoData.sub = null;
+  const acc = accionesDe(o.id_especifico);
+
+  document.getElementById('modal-sub-content').innerHTML = `
+    <h3 style="font-size:16px;font-weight:700">${esc(nomEstab(o.id_establecimiento))}</h3>
+    <p class="mono" style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(o.ticket||'sin ticket')}</p>
+
+    <div class="card mb-3" style="padding:12px">
+      <div class="card-title" style="margin-bottom:8px">📷 Estado anterior</div>
+      ${o.foto_antes?`<img data-ph="${esc(o.foto_antes)}" alt="" style="width:100%;border-radius:8px;max-height:200px;object-fit:cover">`:''}
+      <p style="font-size:13px;margin-top:8px;color:var(--muted)">${esc(o.descripcion)}</p>
+    </div>
+
+    <hr class="divider">
+    <div class="mb-3"><label>Acción ejecutada</label>
+      <select id="sub-accion"><option value="">Selecciona la acción...</option>
+        ${acc.map(a=>`<option value="${esc(a.id_accion)}">${esc(a.descripcion)}</option>`).join('')}
+      </select></div>
+
+    <div class="mb-3"><label>Detalle del trabajo</label>
+      <textarea id="sub-obs" placeholder="Describe cómo se resolvió..."></textarea></div>
+
+    <div class="mb-3"><label>Materiales utilizados</label>
+      <div id="mat-lista"></div>
+      <button class="btn btn-ghost btn-sm mt-3" onclick="agregarMaterial()">+ Agregar material</button></div>
+
+    <div class="mb-3">
+      <div class="photo-zone" id="sub-photo-zone" onclick="document.getElementById('sub-file').click()">
+        <div class="ico">📸</div><p>Fotografía después (obligatoria)</p></div>
+      <input type="file" id="sub-file" accept="image/*" capture="environment" onchange="handlePhoto('sub',this)">
+      <div class="grid-2 mt-3">
+        <button class="btn btn-ghost btn-sm" onclick="abrirFoto('sub-file',false)">🖼 Galería</button>
+        <button class="btn btn-ghost btn-sm" onclick="abrirFoto('sub-file',true)">📷 Cámara</button></div>
+    </div>
+
+    <div class="mb-3"><label>¿Quedó resuelto?</label>
+      <select id="sub-resuelto"><option value="si">Sí, cerrar el ticket</option>
+        <option value="no">No, queda EN PROCESO (falta material o especialista)</option></select></div>
+
+    <button class="btn btn-success" onclick="guardarSubsanacion()">✅ Registrar subsanación</button>
+    <button class="btn btn-ghost mt-3" onclick="closeModal('modal-subsanacion')">Cancelar</button>`;
+  pintarMateriales();
+  hydratePhotos(document.getElementById('modal-sub-content'));
+  openModal('modal-subsanacion');
+}
+
+function agregarMaterial(){ matSel.push({id_material:'', cantidad:1}); pintarMateriales(); }
+function quitarMaterial(i){ matSel.splice(i,1); pintarMateriales(); }
+function setMat(i,campo,val){ matSel[i][campo] = val; if(campo==='id_material') pintarMateriales(); }
+function pintarMateriales() {
+  const mats = cat?.materiales || [];
+  document.getElementById('mat-lista').innerHTML = matSel.map((m,i)=>`
+    <div class="mat-row">
+      <select onchange="setMat(${i},'id_material',this.value)">
+        <option value="">Material...</option>
+        ${mats.map(x=>`<option value="${esc(x.id_material)}" ${m.id_material==x.id_material?'selected':''}>${esc(x.nombre)}</option>`).join('')}
+      </select>
+      <input type="number" min="0" step="0.5" value="${esc(m.cantidad)}" onchange="setMat(${i},'cantidad',this.value)"
+             placeholder="${esc(uniMat(m.id_material)||'cant.')}">
+      <button class="btn-icon" onclick="quitarMaterial(${i})">✕</button>
+    </div>`).join('');
+}
+
+async function guardarSubsanacion() {
+  const o = obs.find(x=>x.id_local===subActual);
+  if (!o) return;
+  const accion = document.getElementById('sub-accion').value;
+  if (!accion) { toast('⚠️ Selecciona la acción ejecutada','err'); return; }
+  if (!currentPhotoData.sub) { toast('⚠️ La fotografía después es obligatoria','err'); return; }
+
+  const resuelto = document.getElementById('sub-resuelto').value === 'si';
+  const s = {
+    id_subsanacion: uid('SUB'),
+    id_local_obs: o.id_local,
+    ticket: o.ticket || '',
+    id_accion: accion,
+    detalle_trabajo: document.getElementById('sub-obs').value.trim(),
+    foto_despues: currentPhotoData.sub,
+    fecha_ejecucion: new Date().toISOString(),
+    id_usuario_ejecuta: sesion.id_usuario,
+    resuelto: resuelto,
+    materiales: matSel.filter(m=>m.id_material && +m.cantidad>0)
+                      .map(m=>({id_material:m.id_material, cantidad:+m.cantidad})),
+    synced:false
+  };
+  subs.push(s); guardar(LS.sub, subs);
+  o.estado = resuelto ? 'Cerrado' : 'En proceso';
+  guardar(LS.obs, obs);
+  encolar('subsanacion', s.id_subsanacion);
+  closeModal('modal-subsanacion');
+
+  const ok = await enviarUno('subsanacion', s.id_subsanacion);
+  toast(ok ? (resuelto?'✅ Ticket cerrado':'⏳ Ticket en proceso') : '💾 Guardado, se enviará solo','ok');
+  refrescarTodo();
+}
+
+// ==================== TICKETS / DETALLE ====================
+function renderRegistros() {
+  const q  = (document.getElementById('reg-search').value||'').toLowerCase();
+  const fe = document.getElementById('reg-filter-estado').value;
+  const fb = document.getElementById('reg-filter-estab').value;
+  let lista = [...obs].reverse();
+  if (fe) lista = lista.filter(o=>o.estado===fe);
+  if (fb) lista = lista.filter(o=>o.id_establecimiento==fb);
+  if (q)  lista = lista.filter(o=>
+    (o.ticket||'').toLowerCase().includes(q) ||
+    nomEstab(o.id_establecimiento).toLowerCase().includes(q) ||
+    (o.descripcion||'').toLowerCase().includes(q));
+  const c = document.getElementById('registros-list');
+  c.innerHTML = lista.length ? lista.map(tarjeta('openDetalleModal')).join('')
+    : '<div class="empty"><div class="ico">📋</div><p>No hay tickets</p></div>';
+  hydratePhotos(c);
+}
+
+function openDetalleModal(idLocal) {
+  const o = obs.find(x=>x.id_local===idLocal);
+  if (!o) return;
+  const mis = subs.filter(s=>s.id_local_obs===idLocal);
+  const infra = sesion.perfil === 'Infraestructura';
+
+  document.getElementById('modal-det-content').innerHTML = `
+    <h3 style="font-size:16px;font-weight:700">${esc(nomEstab(o.id_establecimiento))}</h3>
+    <p class="mono" style="font-size:12px;color:var(--muted)">${esc(o.ticket||'sin ticket aún')}</p>
+    <div style="margin:8px 0 12px">
+      ${o.es_emergencia?'<span class="chip chip-emg">EMERGENCIA · '+esc(o.tipo_emergencia)+'</span>':''}
+      ${chipPri(o.prioridad)}<span class="chip">${esc(o.estado)}</span></div>
+
+    <div class="card mb-3" style="padding:12px">
+      <div class="card-title" style="margin-bottom:6px">📷 Antes — ${esc(fechaCL(o.fecha_registro))}</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">
+        ${esc(nomRecinto(o.id_recinto)||'—')}${o.nombre_espacio?' · '+esc(o.nombre_espacio):''} ·
+        ${esc(nomEspec(o.id_especifico)||'—')}</p>
+      ${o.foto_antes?`<img data-ph="${esc(o.foto_antes)}" alt="" style="width:100%;border-radius:8px;max-height:220px;object-fit:cover;margin-bottom:8px">`:''}
+      <p style="font-size:13px;color:var(--muted)">${esc(o.descripcion)}</p>
+      ${o.justificacion?`<p style="font-size:12px;color:var(--danger);margin-top:8px">Rechazo: ${esc(o.justificacion)}</p>`:''}
+    </div>
+
+    ${mis.map(s=>`
+      <div class="card mb-3" style="padding:12px;border-color:${s.resuelto?'var(--ok)':'var(--accent)'}">
+        <div class="card-title" style="margin-bottom:6px;color:${s.resuelto?'var(--ok)':'var(--accent)'}">
+          ${s.resuelto?'✅ Subsanado':'⏳ En proceso'} — ${esc(fechaCL(s.fecha_ejecucion))}</div>
+        ${s.foto_despues?`<img data-ph="${esc(s.foto_despues)}" alt="" style="width:100%;border-radius:8px;max-height:220px;object-fit:cover;margin-bottom:8px">`:''}
+        <p style="font-size:13px;color:var(--muted)">${esc(s.detalle_trabajo)}</p>
+        ${s.materiales?.length?`<p style="font-size:12px;color:var(--muted);margin-top:8px">
+          Materiales: ${s.materiales.map(m=>esc(m.cantidad+' '+uniMat(m.id_material)+' '+nomMat(m.id_material))).join(' · ')}</p>`:''}
+      </div>`).join('')}
+
+    ${infra && o.prioridad==='Por evaluar' ? `
+      <div class="card mb-3" style="padding:12px">
+        <div class="card-title mb-3">Priorización (solo Infraestructura)</div>
+        <select id="det-pri" class="mb-3"><option>Alta</option><option selected>Media</option><option>Baja</option></select>
+        <div class="grid-2">
+          <button class="btn btn-primary btn-sm" onclick="priorizar('${esc(o.id_local)}',false)">Asignar</button>
+          <button class="btn btn-danger btn-sm" onclick="priorizar('${esc(o.id_local)}',true)">Rechazar</button>
+        </div>
+      </div>`:''}
+
+    ${(o.estado==='Pendiente'||o.estado==='En proceso') && sesion.perfil!=='Director' ?
+      `<button class="btn btn-primary mb-3" onclick="closeModal('modal-detalle');setTimeout(()=>openSubsanacionModal('${esc(o.id_local)}'),120)">✅ Registrar subsanación</button>`:''}
+    <button class="btn btn-ghost" onclick="closeModal('modal-detalle')">Cerrar</button>`;
+  hydratePhotos(document.getElementById('modal-det-content'));
+  openModal('modal-detalle');
+}
+
+async function priorizar(idLocal, rechazar) {
+  const o = obs.find(x=>x.id_local===idLocal);
+  if (!o) return;
+  let just = '';
+  if (rechazar) {
+    just = prompt('Justificación del rechazo:') || '';
+    if (!just.trim()) { toast('El rechazo requiere justificación','err'); return; }
+    o.estado = 'Rechazado'; o.justificacion = just;
+  } else {
+    o.prioridad = document.getElementById('det-pri').value;
+  }
+  guardar(LS.obs, obs);
+  closeModal('modal-detalle');
+  // Se valida también en el servidor: la UI no es la única barrera
+  const r = await api({action:'priorizar', id_usuario:sesion.id_usuario, ticket:o.ticket,
+                       prioridad:o.prioridad, estado:rechazar?'Rechazado':'', justificacion:just});
+  toast(r && r.status==='ok' ? '✅ Actualizado' : '💾 Guardado local, se enviará al sincronizar','ok');
+  refrescarTodo();
+}
+
+// ==================== COLA Y SINCRONIZACIÓN ====================
+const MAX_INTENTOS = 6;
+function encolar(tipo, id) {
+  const ya = cola.find(c=>c.id===id && c.tipo===tipo);
+  if (ya) { ya.intentos=0; ya.nextAt=0; } else cola.push({tipo, id, intentos:0, nextAt:0});
+  guardar(LS.cola, cola); pintarCola();
+}
+
+async function enviarUno(tipo, id) {
+  if (!config.url || !navigator.onLine) return false;
+  let payload;
+  if (tipo === 'observacion') {
+    const o = obs.find(x=>x.id_local===id); if (!o) return true;
+    const b = await idbGet(o.foto_antes);
+    payload = {action:'observacion', data: Object.assign({}, o, {foto_antes: b ? await blobToB64(b) : ''})};
+  } else {
+    const s = subs.find(x=>x.id_subsanacion===id); if (!s) return true;
+    const o = obs.find(x=>x.id_local===s.id_local_obs);
+    if (o && !o.ticket) return false;                     // espera a que la observación tenga ticket
+    const b = await idbGet(s.foto_despues);
+    payload = {action:'subsanacion', data: Object.assign({}, s,
+      {ticket:o?o.ticket:s.ticket, foto_despues: b ? await blobToB64(b) : ''})};
+  }
+  const r = await api(payload);
+  if (!r || r.status !== 'ok') return false;
+
+  if (tipo === 'observacion') {
+    const o = obs.find(x=>x.id_local===id);
+    if (o) { o.ticket = r.ticket; o.synced = true; guardar(LS.obs, obs); }
+  } else {
+    const s = subs.find(x=>x.id_subsanacion===id);
+    if (s) { s.synced = true; guardar(LS.sub, subs); }
+  }
+  cola = cola.filter(c=>!(c.id===id && c.tipo===tipo));
+  guardar(LS.cola, cola); pintarCola();
+  return true;
+}
+
+let sincronizando = false;
+async function sincronizarTodo(silencioso) {
+  if (sincronizando) return;
+  if (!config.url) { if(!silencioso) toast('Configura la URL del servidor','err'); return; }
+  if (!navigator.onLine) { if(!silencioso) toast('Sin conexión','err'); return; }
+  sincronizando = true;
+
+  // 1) Subir lo pendiente (observaciones primero: las subsanaciones necesitan el ticket)
+  const ahora = Date.now();
+  const listos = cola.filter(c=>(c.nextAt||0)<=ahora)
+                     .sort((a,b)=>(a.tipo==='observacion'?0:1)-(b.tipo==='observacion'?0:1));
+  let ok = 0;
+  for (const it of listos) {
+    const enviado = await enviarUno(it.tipo, it.id);
+    if (enviado) ok++;
+    else {
+      it.intentos = (it.intentos||0)+1;
+      it.nextAt = Date.now() + Math.min(5000*Math.pow(2,it.intentos-1), 300000);  // backoff 5s→5min
+      guardar(LS.cola, cola);
+    }
+  }
+  cola = cola.filter(c=>c.intentos<=MAX_INTENTOS);
+  guardar(LS.cola, cola);
+
+  // 2) Refrescar catálogos y bajar tickets del servidor
+  await bajarCatalogos();
+  const r = await api({action:'pull', perfil:sesion.perfil, id_establecimiento:sesion.id_establecimiento});
+  if (r && r.status==='ok') fusionar(r);
+
+  sincronizando = false;
+  refrescarTodo();
+  if (!silencioso) toast(cola.length ? ok+' enviados, '+cola.length+' en espera' : '✅ Todo sincronizado', cola.length?'err':'ok');
+}
+
+/** Fusiona lo del servidor sin pisar lo que aún no se ha subido desde este equipo. */
+function fusionar(r) {
+  (r.observaciones||[]).forEach(srv=>{
+    const local = obs.find(o=>o.id_local===srv.id_local || (o.ticket && o.ticket===srv.ticket));
+    if (local) {
+      if (local.synced) {                       // solo se pisa lo que ya está confirmado
+        local.ticket = srv.ticket;
+        local.prioridad = srv.prioridad;
+        local.estado = srv.estado;
+        local.justificacion = srv.justificacion;
+      }
+    } else {
+      obs.push({
+        id_local: srv.id_local || uid('OBS'), ticket: srv.ticket,
+        id_establecimiento: srv.id_establecimiento, id_recinto: srv.id_recinto,
+        id_especifico: srv.id_especifico, descripcion: srv.descripcion,
+        foto_antes: srv.foto_antes_url || '', prioridad: srv.prioridad, estado: srv.estado,
+        fecha_registro: srv.fecha_registro, id_usuario_levanta: srv.id_usuario_levanta,
+        es_emergencia: srv.es_emergencia === 'SI', tipo_emergencia: srv.tipo_emergencia,
+        justificacion: srv.justificacion, synced:true
+      });
+    }
+  });
+  guardar(LS.obs, obs);
+}
+
+function pintarCola() {
+  const el = document.getElementById('queue-indicator');
+  if (!el) return;
+  if (cola.length) { el.style.display='flex'; el.className='queue-ind';
+    el.innerHTML = `<span class="queue-dot"></span> ${cola.length}`; }
+  else el.style.display='none';
+}
+
+setInterval(()=>{ if(navigator.onLine && cola.length && sesion) sincronizarTodo(true); }, 30000);
+
+// ==================== UI GENERAL ====================
+function refrescarTodo() {
+  const abiertas = obs.filter(o=>o.estado==='Pendiente'||o.estado==='En proceso');
+  document.getElementById('stat-total').textContent   = obs.length;
+  document.getElementById('stat-pending').textContent = abiertas.length;
+  document.getElementById('stat-done').textContent    = obs.filter(o=>o.estado==='Cerrado').length;
+  document.getElementById('stat-queue').textContent   = cola.length;
+
+  const cuenta = p => abiertas.filter(o=>o.prioridad===p).length;
+  document.getElementById('resumen-prioridad').innerHTML =
+    ['Alta','Media','Baja','Por evaluar'].map(p=>`${chipPri(p)} ${cuenta(p)}`).join('&nbsp;&nbsp;');
+
+  // Filtros de establecimiento
+  const usados = [...new Set(obs.map(o=>o.id_establecimiento))];
+  ['sub-filter-estab','reg-filter-estab'].forEach(id=>{
+    const sel = document.getElementById(id); if(!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todos los establecimientos</option>' +
+      usados.map(e=>`<option value="${esc(e)}">${esc(nomEstab(e))}</option>`).join('');
+    sel.value = cur;
+  });
+
+  pintarCola(); renderPendientes(); renderRegistros();
+}
+
+function showTab(t) {
+  ['dashboard','levantamiento','subsanacion','registros'].forEach(x=>{
+    document.getElementById('tab-content-'+x).style.display = x===t ? 'block':'none';
+    document.getElementById('tab-'+x).classList.toggle('active', x===t);
+  });
+  if (t==='subsanacion') renderPendientes();
+  if (t==='registros')   renderRegistros();
+  if (t==='dashboard')   refrescarTodo();
+}
+
+function guardarConfig() {
+  config.url = document.getElementById('config-url').value.trim();
+  guardar(LS.cfg, config);
+  toast('✅ Configuración guardada','ok');
+}
+function toggleTheme() {
+  isDark = !isDark;
+  document.body.classList.toggle('light', !isDark);
+  document.getElementById('theme-btn').textContent = isDark?'🌙':'☀️';
+  localStorage.setItem(LS.tema, isDark?'dark':'light');
+}
+function openModal(id){ document.getElementById(id).classList.add('open'); document.body.style.overflow='hidden'; }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); document.body.style.overflow=''; }
+
+let toastTimer;
+function toast(msg, tipo='ok') {
+  const el=document.getElementById('toast');
+  el.className='show '+tipo;
+  document.getElementById('toast-ico').textContent = tipo==='ok'?'✅':'❌';
+  document.getElementById('toast-msg').textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),3200);
+}
+
+// ==================== ARRANQUE ====================
+document.addEventListener('DOMContentLoaded', () => {
+  if (!isDark) document.body.classList.add('light');
+  document.getElementById('theme-btn').textContent = isDark?'🌙':'☀️';
+  document.getElementById('config-url').value = config.url || '';
+
+  if (sesion) entrarApp();
+  document.getElementById('log-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') hacerLogin(); });
+
+  const barra = document.getElementById('offline-bar');
+  window.addEventListener('online',  ()=>{ barra.classList.remove('show'); if(sesion) sincronizarTodo(); });
+  window.addEventListener('offline', ()=> barra.classList.add('show'));
+  if (!navigator.onLine) barra.classList.add('show');
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && navigator.onLine && cola.length && sesion) sincronizarTodo(true);
+  });
+
+  ['modal-emergencia','modal-subsanacion','modal-detalle'].forEach(id=>{
+    document.getElementById(id).addEventListener('click', e=>{ if(e.target.id===id) closeModal(id); });
+  });
+});
+
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing; if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          if (typeof toast === 'function') toast('Hay una versión nueva, recarga la app', 'ok');
+        }
+      });
+    });
+    setInterval(() => reg.update(), 3600000);
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>
