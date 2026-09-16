@@ -110,7 +110,8 @@ const SCHEMA = {
   USUARIO:             ['id_usuario','usuario','hash','nombre','perfil','id_establecimiento','activo','telefono'],
   CONVERSACION:        ['telefono','estado','datos','ultimo_msg','actualizado'],
   // id_gestor_asignado / fotos_antes_urls: agregados (Módulo 5 y galería multi-foto).
-  OBSERVACION:         ['ticket','id_local','id_establecimiento','id_recinto','id_especifico','descripcion',
+  // cantidad: cuántas unidades del elemento específico están afectadas (ej: 3 enchufes, 2 llaves).
+  OBSERVACION:         ['ticket','id_local','id_establecimiento','id_recinto','id_especifico','cantidad','descripcion',
                         'foto_antes_url','fotos_antes_urls','prioridad','estado','fecha_registro','id_usuario_levanta',
                         'id_gestor_asignado','es_emergencia','tipo_emergencia','continuidad_clases',
                         'justificacion','actualizado'],
@@ -282,6 +283,7 @@ function guardarObservacion(d) {
     id_establecimiento: o.id_establecimiento || '',
     id_recinto: o.id_recinto || '',
     id_especifico: o.id_especifico || '',
+    cantidad: o.cantidad || 1,
     descripcion: o.descripcion || '',
     foto_antes_url: urlPrincipal,
     fotos_antes_urls: urlsTexto,

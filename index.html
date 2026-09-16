@@ -637,6 +637,9 @@
       </div>
       <div class="step" data-step="6">
         <div class="card-title mb-3">Paso 6 · Descripción</div>
+        <label>Cantidad afectada</label>
+        <input type="number" id="lev-cantidad" min="1" step="1" value="1" style="max-width:120px">
+        <p style="font-size:11px;color:var(--muted);margin:4px 0 12px">Ej: 3 enchufes, 2 llaves, 1 ventana</p>
         <textarea id="lev-obs" placeholder="Describe la falla observada..."></textarea>
         <div id="lev-prioridad-box" class="mt-3" style="display:none">
           <label>Prioridad</label>
@@ -1143,6 +1146,7 @@ function iniciarLevantamiento() {
     pasoActual = 3;
   }
   document.getElementById('lev-obs').value = '';
+  document.getElementById('lev-cantidad').value = 1;
   document.getElementById('lev-nombre-espacio').value = '';
   pintarFotosGrid('lev');
   pintarComunas(); pintarEstabs(); pintarRecintos(); pintarGenerales();
@@ -1184,7 +1188,10 @@ function paso(delta) {
       6:[document.getElementById('lev-obs').value.trim(),'Describe la falla']
     }[pasoActual];
     if (falta && !falta[0]) { toast('⚠️ ' + falta[1], 'err'); return; }
-    if (pasoActual === 6) borrador.descripcion = document.getElementById('lev-obs').value.trim();
+    if (pasoActual === 6) {
+      borrador.descripcion = document.getElementById('lev-obs').value.trim();
+      borrador.cantidad = +document.getElementById('lev-cantidad').value || 1;
+    }
   }
   pasoActual = Math.min(7, Math.max(1, pasoActual + delta));
   mostrarPaso();
@@ -1329,6 +1336,7 @@ function cerrarLightbox() { document.getElementById('lightbox').classList.remove
 async function guardarLevantamiento() {
   if (!currentFotos.lev.length) { toast('⚠️ Al menos 1 fotografía es obligatoria','err'); return; }
   borrador.descripcion = document.getElementById('lev-obs').value.trim();
+  borrador.cantidad = +document.getElementById('lev-cantidad').value || 1;
   if (!borrador.descripcion) { toast('⚠️ Falta la descripción','err'); pasoActual=6; mostrarPaso(); return; }
 
   const infra = sesion.perfil === 'Infraestructura';
@@ -1341,6 +1349,7 @@ async function guardarLevantamiento() {
     id_recinto: borrador.id_recinto,
     nombre_espacio: nombreEspacio,
     id_especifico: borrador.id_especifico,
+    cantidad: borrador.cantidad || 1,
     descripcion: borrador.descripcion,
     foto_antes: currentFotos.lev[0],               // compat: primera foto como principal
     fotos_antes: currentFotos.lev.slice(),         // galería completa (hasta 3)
@@ -1479,7 +1488,7 @@ function tarjeta(fn) {
         <div style="flex:1">
           <div class="record-name">${esc(nomEstab(o.id_establecimiento))}</div>
           <div class="record-meta mono" style="font-size:11px">${esc(o.ticket||'sin ticket aún')}</div>
-          <div class="record-meta">${esc(nomRecinto(o.id_recinto)||o.tipo_emergencia||'—')} · ${esc(nomEspec(o.id_especifico)||'Emergencia')}</div>
+          <div class="record-meta">${esc(nomRecinto(o.id_recinto)||o.tipo_emergencia||'—')} · ${esc(nomEspec(o.id_especifico)||'Emergencia')}${o.cantidad>1?' × '+esc(o.cantidad):''}</div>
           <div style="margin-top:6px">
             ${o.es_emergencia?'<span class="chip chip-emg">EMERGENCIA</span>':''}
             ${chipPri(o.prioridad)}<span class="chip">${esc(o.estado)}</span>
@@ -1664,7 +1673,7 @@ function openDetalleModal(idLocal) {
       <div class="card-title" style="margin-bottom:6px">📷 Antes — ${esc(fechaCL(o.fecha_registro))}</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:8px">
         ${esc(nomRecinto(o.id_recinto)||'—')}${o.nombre_espacio?' · '+esc(o.nombre_espacio):''} ·
-        ${esc(nomEspec(o.id_especifico)||'—')}</p>
+        ${esc(nomEspec(o.id_especifico)||'—')}${o.cantidad>1?' × '+esc(o.cantidad):''}</p>
       ${o.foto_antes?`<img data-ph="${esc(o.foto_antes)}" alt="" style="width:100%;border-radius:8px;max-height:220px;object-fit:cover;margin-bottom:8px">`:''}
       <p style="font-size:13px;color:var(--muted)">${esc(o.descripcion)}</p>
       ${o.justificacion?`<p style="font-size:12px;color:var(--danger);margin-top:8px">Rechazo: ${esc(o.justificacion)}</p>`:''}
@@ -1873,7 +1882,7 @@ function fusionar(r) {
       obs.push({
         id_local: srv.id_local || uid('OBS'), ticket: srv.ticket,
         id_establecimiento: srv.id_establecimiento, id_recinto: srv.id_recinto,
-        id_especifico: srv.id_especifico, descripcion: srv.descripcion,
+        id_especifico: srv.id_especifico, cantidad: srv.cantidad || 1, descripcion: srv.descripcion,
         foto_antes: srv.foto_antes_url || '', prioridad: srv.prioridad, estado: srv.estado,
         fecha_registro: srv.fecha_registro, id_usuario_levanta: srv.id_usuario_levanta,
         es_emergencia: srv.es_emergencia === 'SI', tipo_emergencia: srv.tipo_emergencia,
@@ -2410,7 +2419,7 @@ function construirFilasReporte() {
   return obs.map(o=>({
     Ticket: o.ticket||'', Comuna: nomComuna(objEstab(o.id_establecimiento)?.id_comuna),
     Establecimiento: nomEstab(o.id_establecimiento), Recinto: nomRecinto(o.id_recinto),
-    Elemento: nomEspec(o.id_especifico), Prioridad: o.prioridad, Estado: o.estado,
+    Elemento: nomEspec(o.id_especifico), Cantidad: o.cantidad||1, Prioridad: o.prioridad, Estado: o.estado,
     Emergencia: o.es_emergencia?'SI':'NO', Fecha_registro: fechaCL(o.fecha_registro),
     Dias_abierto: o.estado==='Cerrado' ? '' : Math.round((Date.now()-new Date(o.fecha_registro))/86400000)
   }));
