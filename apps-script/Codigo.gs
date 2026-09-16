@@ -111,10 +111,14 @@ const SCHEMA = {
   CONVERSACION:        ['telefono','estado','datos','ultimo_msg','actualizado'],
   // id_gestor_asignado / fotos_antes_urls: agregados (Módulo 5 y galería multi-foto).
   // cantidad: cuántas unidades del elemento específico están afectadas (ej: 3 enchufes, 2 llaves).
-  OBSERVACION:         ['ticket','id_local','id_establecimiento','id_recinto','id_especifico','cantidad','descripcion',
+  // Se agrega SIEMPRE AL FINAL del arreglo: leer()/upsert() mapean por posición de columna,
+  // así que insertar una columna nueva en medio del SCHEMA desalinearía todas las filas ya
+  // existentes en la hoja (su fila física no cambia, pero el SCHEMA nuevo leería otro campo
+  // en esa posición). Agregar al final es lo único seguro sobre una hoja con datos reales.
+  OBSERVACION:         ['ticket','id_local','id_establecimiento','id_recinto','id_especifico','descripcion',
                         'foto_antes_url','fotos_antes_urls','prioridad','estado','fecha_registro','id_usuario_levanta',
                         'id_gestor_asignado','es_emergencia','tipo_emergencia','continuidad_clases',
-                        'justificacion','actualizado'],
+                        'justificacion','actualizado','cantidad'],
   // validado / fotos_despues_urls: agregados (loop de validación del Módulo 2 y galería multi-foto).
   SUBSANACION:         ['id_subsanacion','ticket','id_accion','detalle_trabajo','foto_despues_url',
                         'fotos_despues_urls','fecha_ejecucion','id_usuario_ejecuta','resuelto','validado','actualizado'],
