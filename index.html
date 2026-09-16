@@ -1619,7 +1619,7 @@ async function guardarSubsanacion() {
 
   // Descuenta el saldo local del gestor por cada material declarado (consumido) y lo encola
   // como 'bodega_cierre_material' para que Bodega imparta el mismo descuento en el servidor.
-  materiales.forEach(m => descontarSaldoLocal(sesion.id_usuario, m.id_material, m.cantidad, o.ticket || o.id_local));
+  for (const m of materiales) await descontarSaldoLocal(sesion.id_usuario, m.id_material, m.cantidad, o.ticket || o.id_local);
 
   closeModal('modal-subsanacion');
 
@@ -1931,15 +1931,16 @@ function herramientasDeGestor(idUsuario) {
 // Aplica localmente (optimista) el descuento de saldo de un gestor al declarar consumo en
 // una subsanación, y encola un 'bodega_cierre_material' para que el servidor haga lo mismo:
 // impute el costo al establecimiento y libere el resto como sobrante que vuelve a bodega.
-function descontarSaldoLocal(idUsuario, idMaterial, cantidad, ticket) {
+async function descontarSaldoLocal(idUsuario, idMaterial, cantidad, ticket) {
   const s = (inv.saldos||[]).find(x=>x.id_usuario==idUsuario && x.id_material===idMaterial);
   if (s) { s.cantidad = Math.max(0, +s.cantidad - cantidad); guardar(LS.inv, inv); }
   const reg = {
-    id_local: uid('BODC'), tipo:'cierre_material', id_usuario, id_material:idMaterial,
+    id_local: uid('BODC'), tipo:'cierre_material', id_usuario: idUsuario, id_material:idMaterial,
     cantidad_consumida: cantidad, ticket, fecha: new Date().toISOString(), synced:false
   };
   bodCola.push(reg); guardar(LS.bodcola, bodCola);
   encolar('bodega_cierre_material', reg.id_local);
+  await enviarUno('bodega_cierre_material', reg.id_local);
 }
 
 function pintarInventario() {
