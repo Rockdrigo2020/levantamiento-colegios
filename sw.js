@@ -1,7 +1,11 @@
 // sw.js — Service Worker LevantApp PWA
 // v4: network-first para HTML (evita quedarse pegado en versión vieja),
 //     cache-first para assets estáticos, bypass total de Apps Script.
-const CACHE = 'levantapp-v4';
+// v5: agrega Bodega, Emergencias (FAB global), Gestión y control y Analítica IA.
+//     Sin cambios en la estrategia de cache: las libs de Analítica (SheetJS/Chart.js,
+//     cdnjs.cloudflare.com) ya caen en la rama "Assets" cache-first genérica de abajo,
+//     así que quedan disponibles offline después del primer uso online.
+const CACHE = 'levantapp-v5';
 const BASE = '/levantamiento-colegios/';
 const ASSETS = [
   BASE,
