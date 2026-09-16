@@ -1,5 +1,31 @@
 # Contrato de acciones del backend (Google Apps Script)
 
+> **✅ Ya implementado.** `apps-script/Codigo.gs` en este repo es la copia completa y
+> actualizada del proyecto real de Apps Script (`LevantApp SLEP Puelche`,
+> `SHEET_ID = 1lA7mOtYB7UYT4FbW-s4O_YBw20B2z9vo-varEG3V6iM`), con las 12 acciones nuevas
+> ya escritas siguiendo exactamente el mismo estilo, esquema y helpers (`leer`/`upsert`/
+> `buscar`/`subirFoto`/`hash`) que el resto del archivo. Este documento describe el
+> contrato para referencia; el código ya lo cumple.
+>
+> **Cómo aplicarlo** (no se puede subir automáticamente: el editor de Apps Script no
+> tiene una API de escritura accesible desde aquí):
+> 1. Abre el proyecto: https://script.google.com/home/projects/1lqsCres0DexM6W4iMsUw3vwIJy89-QNDGiQmsgwdYbL56Wc18vb1IPth/edit
+> 2. Abre el archivo `Código.gs`, selecciona todo (Ctrl/Cmd+A) y pégale encima el
+>    contenido de `apps-script/Codigo.gs` de este repo.
+> 3. Guarda (Ctrl/Cmd+S).
+> 4. **Implementar → Administrar implementaciones → ✏️ (editar la implementación web
+>    activa) → Versión: Nueva versión → Implementar.** Sin este paso, la URL `/exec` que
+>    usa la app (`SERVIDOR` en `index.html`) sigue sirviendo el código viejo.
+> 5. Ejecuta una vez la función `setup` desde el editor (selector de función arriba,
+>    ▶ Ejecutar) para crear las hojas nuevas (`HERRAMIENTA`, `BODEGA_MOVIMIENTO`,
+>    `BODEGA_SALDO`, `BODEGA_CUSTODIA`, `BODEGA_RECEPCION`, `EMPRESA`, `OC`, `OC_PARTIDA`,
+>    `VALIDACION`) y sembrar el catálogo base de 8 herramientas. Es idempotente: no
+>    duplica nada si ya la habías corrido antes.
+> 6. Carga stock inicial de materiales: por ahora no hay pantalla masiva para esto, así
+>    que la forma más rápida es abrir la hoja `MATERIAL` directamente y rellenar a mano
+>    las columnas `stock` y `minimo` (quedaron en blanco a propósito, sin inventar
+>    números); desde ahí en adelante todo se mueve solo vía `bodega_recepcion`.
+
 Este documento describe cada `action` que `index.html` envía al Apps Script (`SERVIDOR`,
 la constante `const SERVIDOR = 'https://script.google.com/macros/s/.../exec'` en el
 `<script>` principal). El frontend siempre hace `POST` con `Content-Type: text/plain`
@@ -40,8 +66,12 @@ Se reintenta solo cuando hay conexión, con backoff exponencial (5 s → 5 min).
     (el frontend ya no permite declarar material sin saldo).
 - **`priorizar`**: agregar `id_gestor_asignado` (string, opcional) — el gestor de
   mantenimiento al que Infraestructura asigna el ticket.
-- **`pull`**: si `id_establecimiento` viene vacío/undefined, se asume perfil `Infraestructura`
-  pidiendo **toda la red** (antes siempre se mandaba un establecimiento).
+- **`pull`**: sin cambios de contrato — ya filtraba solo cuando `perfil === 'Director'` y
+  `id_establecimiento` venían juntos, así que Infraestructura (y Maestro) ya recibían toda
+  la red. El frontend ahora manda `id_establecimiento` vacío para todo perfil que no sea
+  Director, para que quede explícito.
+- **`catalogos`**: ahora recibe `id_usuario` (el de quien pide) para decidir si incluir
+  `usuarios[]` en la respuesta.
 
 ---
 
@@ -165,12 +195,13 @@ Si `conforme:false` → estado `Reabierto`; el frontend ya vuelve a mostrarlo en
 Subsanar del mismo maestro (`id_usuario_ejecuta` de la última subsanación).
 
 ### `admin_usuario`
-Alta o edición de un usuario (login).
+Alta o edición de un usuario (login). Exclusivo de Infraestructura — el backend valida
+`id_usuario_actor` contra la tabla `USUARIO` antes de escribir nada.
 ```json
 {"action":"admin_usuario", "data":{
   "id_local":"ADM_xxx", "id_usuario":"USR_9", "nombre":"Juan Pérez",
   "usuario_login":"jperez", "clave":"******", "perfil":"Maestro",
-  "id_establecimiento":"", "es_edicion":false
+  "id_establecimiento":"", "es_edicion":false, "id_usuario_actor":"USR_1"
 }}
 ```
 `clave` viaja vacía cuando es una edición sin cambio de contraseña — el backend NO debe
@@ -178,11 +209,12 @@ sobrescribir la clave existente en ese caso. `perfil` ∈ `Director | Maestro |
 Infraestructura | Bodega`.
 
 ### `admin_catalogo`
-Alta de un material, herramienta o empresa desde la UI de Administración.
+Alta de un material, herramienta o empresa desde la UI de Administración. También
+exclusivo de Infraestructura, mismo chequeo de `id_usuario_actor`.
 ```json
 {"action":"admin_catalogo", "data":{
   "id_local":"ADM_xxx", "tipo_catalogo":"material", "id_material":"MAT_9",
-  "nombre":"Cinta aisladora", "unidad":"un", "minimo":5, "stock":0
+  "nombre":"Cinta aisladora", "unidad":"un", "minimo":5, "stock":0, "id_usuario_actor":"USR_1"
 }}
 ```
 `tipo_catalogo` ∈ `material | herramienta | empresa` (los campos varían según el tipo,
@@ -203,3 +235,9 @@ ver `CATALOGO_CFG` en `index.html` para la lista exacta de campos por tipo).
 - Las fotos siempre viajan en un arreglo `fotos` (o `fotos_antes`/`fotos_despues` según el
   caso) de strings `data:image/jpeg;base64,...`, ya comprimidas a máx. 1280px por el
   cliente antes de enviarlas.
+- Permisos: igual que `priorizar` ya hacía, cada acción sensible se revalida en el
+  servidor (no solo en la UI) buscando al usuario actor en `USUARIO` y comprobando su
+  `perfil`. `bodega_entrega`/`bodega_recepcion` exigen `Infraestructura` o `Bodega`;
+  `gestion_oc`/`validar_subsanacion`/`admin_usuario`/`admin_catalogo` exigen
+  `Infraestructura`. Un actor sin permiso recibe `{status:'error'}` y el registro queda
+  en cola local hasta que alguien con el perfil correcto lo reintente.

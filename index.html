@@ -1103,7 +1103,8 @@ async function api(payload, timeoutMs = 60000) {
 }
 
 async function bajarCatalogos() {
-  const r = await api({action:'catalogos'});
+  // id_usuario: el servidor solo devuelve el listado de usuarios si quien pide es Infraestructura.
+  const r = await api({action:'catalogos', id_usuario: sesion ? sesion.id_usuario : ''});
   if (r && r.status === 'ok') { cat = r; guardar(LS.cat, cat); }
   return cat;
 }
@@ -2347,7 +2348,7 @@ async function guardarUsuario() {
     id_usuario: idExistente || uid('USR'), nombre, usuario_login: login,
     clave: document.getElementById('us-clave').value, perfil: document.getElementById('us-perfil').value,
     id_establecimiento: document.getElementById('us-estab').value || '', es_edicion: !!idExistente,
-    id_local: uid('ADM'), synced:false
+    id_usuario_actor: sesion.id_usuario, id_local: uid('ADM'), synced:false
   };
   cat.usuarios = cat.usuarios || [];
   const i = cat.usuarios.findIndex(x=>x.id_usuario===u.id_usuario);
@@ -2387,7 +2388,8 @@ function abrirFormCatalogo(tipo) {
 }
 async function guardarCatalogo(tipo) {
   const cfg = CATALOGO_CFG[tipo];
-  const item = { [cfg.id]: uid(tipo.slice(0,3).toUpperCase()), id_local: uid('ADM'), tipo_catalogo:tipo, synced:false };
+  const item = { [cfg.id]: uid(tipo.slice(0,3).toUpperCase()), id_local: uid('ADM'), tipo_catalogo:tipo,
+    id_usuario_actor: sesion.id_usuario, synced:false };
   let ok1 = true;
   cfg.campos.forEach(([k])=>{ const v = document.getElementById('ct-'+k).value.trim(); if(!v && k==='nombre') ok1=false; item[k]=v; });
   if (!ok1) { toast('⚠️ El nombre es obligatorio','err'); return; }
