@@ -764,6 +764,11 @@
       <div class="subpanel" id="bod-recepcion">
         <div class="card">
           <div class="card-title mb-3">Ingreso de material (compra)</div>
+          <div class="mb-3">
+            <input type="file" id="rec-ia-file" accept="image/*,.pdf" style="display:none" onchange="leerFacturaConIA(this)">
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('rec-ia-file').click()">🤖 Leer factura/guía con IA</button>
+            <p id="rec-ia-status" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
+          </div>
           <div class="mb-3"><label>Material</label><select id="rec-material"></select></div>
           <div class="grid-2 mb-3">
             <div><label>Cantidad</label><input type="number" id="rec-cantidad" min="1" step="1" value="1"></div>
@@ -778,6 +783,7 @@
             <button class="btn btn-ghost btn-sm mt-3" onclick="document.getElementById('rec-file').click()">📎 Adjuntar</button>
           </div>
           <button class="btn btn-success" onclick="guardarRecepcionBodega()">📥 Registrar recepción</button>
+          <div id="rec-ia-list" class="mt-3"></div>
         </div>
       </div>
     </div>
@@ -1127,6 +1133,33 @@ const nomGeneral= id => (cat?.generales||[]).find(g=>g.id_general==id)?.nombre |
 const objMat    = id => (cat?.materiales||[]).find(m=>m.id_material==id) || (inv?.materiales||[]).find(m=>m.id_material==id);
 const nomMat    = id => objMat(id)?.nombre || id;
 const uniMat    = id => objMat(id)?.unidad || '';
+
+// ==================== LECTURA DE DOCUMENTOS CON IA (OC / facturas) ====================
+function leerArchivoB64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+const normTxt = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+function matchMaterialPorNombre(desc) {
+  const d = normTxt(desc);
+  if (!d) return null;
+  const lista = inv.materiales||[];
+  return lista.find(x=>normTxt(x.nombre)===d)
+      || lista.find(x=>d.includes(normTxt(x.nombre)) || normTxt(x.nombre).includes(d))
+      || null;
+}
+function matchEmpresaPorNombre(nombre) {
+  const d = normTxt(nombre);
+  if (!d) return null;
+  const lista = cat?.empresas||[];
+  return lista.find(x=>normTxt(x.nombre)===d)
+      || lista.find(x=>d.includes(normTxt(x.nombre)) || normTxt(x.nombre).includes(d))
+      || null;
+}
 function accionesDe(idEspec) {
   const a = (cat?.acciones||[]).filter(x=>x.id_especifico==idEspec);
   const otras = (cat?.acciones||[]).filter(x=>!x.id_especifico);
@@ -1917,6 +1950,7 @@ function showSub(grupo, id) {
   document.querySelectorAll('#'+barId+' .subtab-btn').forEach(b=>b.classList.toggle('active', b.dataset.sp===id));
   const refrescos = {
     'bod-inventario': pintarInventario, 'bod-entregar': prepararEntregaBodega, 'bod-custodia': pintarCustodia,
+    'bod-recepcion': ()=>{ recDetectados=[]; pintarRecDetectados(); const s=document.getElementById('rec-ia-status'); if(s) s.textContent=''; },
     'ges-bandeja': pintarBandejaGestion, 'ges-validacion': pintarValidacionCierres, 'ges-oc': pintarOCList,
     'adm-usuarios': pintarAdminUsuarios, 'adm-materiales': ()=>pintarAdminCatalogo('material'),
     'adm-herramientas': ()=>pintarAdminCatalogo('herramienta'), 'adm-empresas': ()=>pintarAdminCatalogo('empresa'),
@@ -2121,31 +2155,97 @@ async function devolverHerramienta(idHerramienta, idUsuario) {
   pintarCustodia(); pintarInventario();
 }
 
+async function registrarRecepcion(idMat, cant, valor, proveedor, documento, fotos) {
+  const reg = {
+    id_local: uid('BODR'), tipo:'recepcion', id_material:idMat, cantidad:cant,
+    valor_unitario: valor||0, proveedor: proveedor||'', documento: documento||'',
+    fecha:new Date().toISOString(), id_usuario:sesion.id_usuario,
+    fotos: fotos||[], synced:false
+  };
+  const m = (inv.materiales||[]).find(x=>x.id_material===idMat);
+  if (m) { m.stock = +m.stock + cant; guardar(LS.inv, inv); }
+  bodCola.push(reg); guardar(LS.bodcola, bodCola);
+  encolar('bodega_recepcion', reg.id_local);
+  const ok = await enviarUno('bodega_recepcion', reg.id_local);
+  pintarInventario();
+  return ok;
+}
 async function guardarRecepcionBodega() {
   const idMat = document.getElementById('rec-material').value;
   const cant  = +document.getElementById('rec-cantidad').value || 0;
   if (!idMat) { toast('⚠️ Selecciona el material','err'); return; }
   if (cant<=0){ toast('⚠️ Cantidad inválida','err'); return; }
 
-  const reg = {
-    id_local: uid('BODR'), tipo:'recepcion', id_material:idMat, cantidad:cant,
-    valor_unitario:+document.getElementById('rec-valor').value||0,
-    proveedor: document.getElementById('rec-proveedor').value.trim(),
-    documento: document.getElementById('rec-doc').value.trim(),
-    fecha:new Date().toISOString(), id_usuario:sesion.id_usuario,
-    fotos: currentFotos.rec.slice(), synced:false
-  };
-  const m = (inv.materiales||[]).find(x=>x.id_material===idMat);
-  if (m) { m.stock = +m.stock + cant; guardar(LS.inv, inv); }
-  bodCola.push(reg); guardar(LS.bodcola, bodCola);
-  encolar('bodega_recepcion', reg.id_local);
-
-  const ok = await enviarUno('bodega_recepcion', reg.id_local);
+  const ok = await registrarRecepcion(idMat, cant,
+    +document.getElementById('rec-valor').value||0,
+    document.getElementById('rec-proveedor').value.trim(),
+    document.getElementById('rec-doc').value.trim(),
+    currentFotos.rec.slice());
   toast(ok ? '✅ Recepción registrada' : '💾 Guardada, se enviará sola', 'ok');
   currentFotos.rec = []; pintarFotosGrid('rec');
   document.getElementById('rec-proveedor').value=''; document.getElementById('rec-doc').value='';
   document.getElementById('rec-valor').value=''; document.getElementById('rec-cantidad').value=1;
-  pintarInventario();
+}
+let recDetectados = [];
+async function leerFacturaConIA(input) {
+  const file = (input.files||[])[0];
+  input.value = '';
+  if (!file) return;
+  const status = document.getElementById('rec-ia-status');
+  status.textContent = '🤖 Leyendo documento con IA...';
+  const b64 = await leerArchivoB64(file);
+  const r = await api({action:'leer_documento_ia', imagen:b64, tipo:'factura', id_usuario:sesion.id_usuario}, 90000);
+  if (!r || r.status !== 'ok') { status.textContent=''; toast('⚠️ ' + (r?.message || 'No se pudo leer el documento'), 'err'); return; }
+  const d = r.datos || {};
+  if (d.empresa) document.getElementById('rec-proveedor').value = d.empresa;
+  if (d.numero_documento) document.getElementById('rec-doc').value = d.numero_documento;
+  const items = d.items || [];
+  if (items.length <= 1) {
+    const it = items[0] || {};
+    const mat = matchMaterialPorNombre(it.descripcion);
+    if (mat) document.getElementById('rec-material').value = mat.id_material;
+    else if (it.descripcion) toast('⚠️ No se encontró "'+it.descripcion+'" en el catálogo de materiales — selecciónalo manualmente', 'err');
+    if (it.cantidad) document.getElementById('rec-cantidad').value = +it.cantidad;
+    if (it.valor_unitario) document.getElementById('rec-valor').value = +it.valor_unitario;
+    recDetectados = [];
+  } else {
+    recDetectados = items.map(it => ({
+      descripcion: it.descripcion||'',
+      id_material: matchMaterialPorNombre(it.descripcion)?.id_material || '',
+      cantidad: +it.cantidad||1, valor: +it.valor_unitario||0
+    }));
+  }
+  pintarRecDetectados();
+  status.textContent = '✅ Datos leídos — revisa antes de registrar';
+  toast('✅ Documento leído: ' + items.length + ' ítem(s) detectados', 'ok');
+}
+function pintarRecDetectados() {
+  const c = document.getElementById('rec-ia-list');
+  if (!c) return;
+  c.innerHTML = recDetectados.length ? '<label>Ítems detectados (revisa y registra uno por uno)</label>' + recDetectados.map((it,i)=>`
+    <div class="partida-row">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${esc(it.descripcion)}</div>
+      <select onchange="setRecDetectado(${i},'id_material',this.value)">
+        <option value="">Material...</option>
+        ${(inv.materiales||[]).map(m=>`<option value="${esc(m.id_material)}" ${it.id_material===m.id_material?'selected':''}>${esc(m.nombre)}</option>`).join('')}
+      </select>
+      <div class="grid-2 mt-3">
+        <input type="number" placeholder="Cantidad" value="${esc(it.cantidad)}" onchange="setRecDetectado(${i},'cantidad',this.value)">
+        <input type="number" placeholder="Valor unit." value="${esc(it.valor)}" onchange="setRecDetectado(${i},'valor',this.value)">
+      </div>
+      <button class="btn btn-success btn-sm mt-3" onclick="registrarRecepcionDetectada(${i})">📥 Registrar este ítem</button>
+    </div>`).join('') : '';
+}
+function setRecDetectado(i, campo, val) { recDetectados[i][campo] = campo==='id_material' ? val : +val; }
+async function registrarRecepcionDetectada(i) {
+  const it = recDetectados[i]; if (!it) return;
+  if (!it.id_material) { toast('⚠️ Selecciona el material para "'+it.descripcion+'"','err'); return; }
+  if (!(it.cantidad>0)) { toast('⚠️ Cantidad inválida','err'); return; }
+  const ok = await registrarRecepcion(it.id_material, it.cantidad, it.valor,
+    document.getElementById('rec-proveedor').value.trim(), document.getElementById('rec-doc').value.trim(), []);
+  toast(ok ? '✅ Recepción registrada' : '💾 Guardada, se enviará sola', 'ok');
+  recDetectados.splice(i,1);
+  pintarRecDetectados();
 }
 function poblarRecepcionSelect() {
   const sel = document.getElementById('rec-material');
@@ -2207,6 +2307,11 @@ function abrirNuevaOC() {
   ocActual = { id_local: uid('OC'), partidas: [] };
   document.getElementById('modal-oc-content').innerHTML = `
     <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">🏗️ Nueva orden de compra</h3>
+    <div class="mb-3">
+      <input type="file" id="oc-ia-file" accept="image/*,.pdf" style="display:none" onchange="leerOCConIA(this)">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('oc-ia-file').click()">🤖 Leer OC con IA (foto o PDF)</button>
+      <p id="oc-ia-status" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
+    </div>
     <div class="mb-3"><label>Empresa</label>
       <select id="oc-empresa">${(cat?.empresas||[]).map(e=>`<option value="${esc(e.id_empresa)}">${esc(e.nombre)}</option>`).join('') || '<option value="">Sin empresas — créalas en Administración</option>'}</select></div>
     <div class="grid-2 mb-3">
@@ -2237,6 +2342,29 @@ function pintarPartidasForm() {
         <button class="btn-icon" onclick="quitarPartidaForm(${i})">✕</button>
       </div>
     </div>`).join('') || '<p style="color:var(--muted);font-size:12px">Sin partidas aún.</p>';
+}
+async function leerOCConIA(input) {
+  const file = (input.files||[])[0];
+  input.value = '';
+  if (!file) return;
+  const status = document.getElementById('oc-ia-status');
+  status.textContent = '🤖 Leyendo documento con IA...';
+  const b64 = await leerArchivoB64(file);
+  const r = await api({action:'leer_documento_ia', imagen:b64, tipo:'oc', id_usuario:sesion.id_usuario}, 90000);
+  if (!r || r.status !== 'ok') { status.textContent=''; toast('⚠️ ' + (r?.message || 'No se pudo leer el documento'), 'err'); return; }
+  const d = r.datos || {};
+  if (d.numero_oc) document.getElementById('oc-numero').value = d.numero_oc;
+  if (d.id_licitacion) document.getElementById('oc-licitacion').value = d.id_licitacion;
+  const emp = matchEmpresaPorNombre(d.empresa);
+  if (emp) document.getElementById('oc-empresa').value = emp.id_empresa;
+  else if (d.empresa) toast('⚠️ Empresa "'+d.empresa+'" no está en el catálogo — créala en Administración o selecciónala manualmente', 'err');
+  (d.items||[]).forEach(it => ocActual.partidas.push({
+    id_local: uid('PART'), item: it.descripcion||'', unidad: it.unidad||'',
+    cantidad: +it.cantidad||1, monto: +it.monto||0, avance: 0
+  }));
+  pintarPartidasForm();
+  status.textContent = '✅ Datos leídos — revisa antes de guardar';
+  toast('✅ Documento leído: ' + (d.items||[]).length + ' ítem(s) detectados', 'ok');
 }
 async function guardarOC() {
   const empresa = document.getElementById('oc-empresa').value;

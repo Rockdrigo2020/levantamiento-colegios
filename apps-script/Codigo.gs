@@ -169,6 +169,14 @@ function doPost(e) {
     return ContentService.createTextOutput('EVENT_RECEIVED').setMimeType(ContentService.MimeType.TEXT);
   }
 
+  // Lectura de documentos con IA (Gemini): no toca la planilla, así que se responde
+  // sin tomar el lock — una llamada a Gemini puede tardar varios segundos y no hay
+  // razón para bloquear al resto de los usuarios mientras tanto.
+  if (d.action === 'leer_documento_ia') {
+    try { return json(leerDocumentoIA(d)); }
+    catch (err) { console.error(err); return json({status:'error', message:String(err && err.message || err)}); }
+  }
+
   // API de la PWA
   const lock = LockService.getScriptLock();
   try {
@@ -527,6 +535,61 @@ function bodegaRecepcion(d) {
     foto_url: url || (prev && prev.foto_url) || '', actualizado: new Date()
   });
   return {status:'ok'};
+}
+
+/* ======================================================================
+   LECTURA DE DOCUMENTOS CON IA (Gemini) — OC y facturas/guías de bodega
+   Requiere una API key gratuita de Google AI Studio (aistudio.google.com/apikey)
+   guardada en Extensiones > Propiedades del proyecto > Propiedades del script
+   con el nombre GEMINI_API_KEY.
+   ====================================================================== */
+
+const PROMPT_LEER_OC =
+  'Eres un asistente que extrae datos estructurados de ordenes de compra (OC) chilenas ' +
+  'de construccion/mantencion. Devuelve SOLO un JSON valido (sin texto adicional, sin ' +
+  'markdown, sin comillas triples) con esta forma exacta: {"empresa":"","rut_empresa":"",' +
+  '"numero_oc":"","id_licitacion":"","fecha":"YYYY-MM-DD","items":[{"descripcion":"",' +
+  '"unidad":"","cantidad":0,"monto":0}]}. Si un campo no aparece en el documento, dejalo ' +
+  'como cadena vacia o 0. cantidad y monto deben ser numeros, nunca texto.';
+
+const PROMPT_LEER_FACTURA =
+  'Eres un asistente que extrae datos estructurados de facturas o guias de despacho ' +
+  'chilenas de materiales de ferreteria/construccion. Devuelve SOLO un JSON valido (sin ' +
+  'texto adicional, sin markdown, sin comillas triples) con esta forma exacta: ' +
+  '{"empresa":"","rut_empresa":"","numero_documento":"","fecha":"YYYY-MM-DD",' +
+  '"items":[{"descripcion":"","unidad":"","cantidad":0,"valor_unitario":0}]}. Si un ' +
+  'campo no aparece en el documento, dejalo como cadena vacia o 0. cantidad y ' +
+  'valor_unitario deben ser numeros, nunca texto.';
+
+function leerDocumentoIA(d) {
+  if (!permisoBodega(d.id_usuario)) return {status:'error', message:'sin permiso para leer documentos'};
+  const imagen = d.imagen;
+  if (!imagen) return {status:'error', message:'falta el documento (imagen o PDF)'};
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return {status:'error', message:'Falta configurar GEMINI_API_KEY en Propiedades del script'};
+
+  const m = String(imagen).match(/^data:(.*?);base64,(.*)$/);
+  if (!m) return {status:'error', message:'formato de documento invalido'};
+  const mime = m[1], b64 = m[2];
+  const prompt = d.tipo === 'factura' ? PROMPT_LEER_FACTURA : PROMPT_LEER_OC;
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
+  const payload = {
+    contents: [{ parts: [ {text: prompt}, {inline_data: {mime_type: mime, data: b64}} ] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json' }
+  };
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true
+  });
+  const code = resp.getResponseCode();
+  const body = JSON.parse(resp.getContentText());
+  if (code !== 200) return {status:'error', message:'Gemini: ' + (body.error ? body.error.message : resp.getContentText())};
+  const texto = body.candidates && body.candidates[0] && body.candidates[0].content.parts[0].text;
+  if (!texto) return {status:'error', message:'Gemini no devolvio contenido legible'};
+  let datos;
+  try { datos = JSON.parse(texto); }
+  catch (e) { return {status:'error', message:'Gemini devolvio un formato inesperado'}; }
+  return {status:'ok', datos: datos};
 }
 
 /* ======================================================================

@@ -222,6 +222,55 @@ ver `CATALOGO_CFG` en `index.html` para la lista exacta de campos por tipo).
 
 ---
 
+## Acciones NUEVAS · Lectura de documentos con IA (OC y facturas)
+
+### `leer_documento_ia`
+Sube una foto o PDF de una OC o una factura/guía de despacho y devuelve los campos
+estructurados que Gemini detectó, para autocompletar el formulario correspondiente
+(**Gestión → Nueva OC** o **Bodega → Recepción**). No escribe nada en la planilla — es
+de solo lectura, y por eso se responde sin tomar el `LockService` lock (una llamada a
+Gemini puede demorar varios segundos).
+
+```json
+{"action":"leer_documento_ia", "imagen":"data:application/pdf;base64,...", "tipo":"oc",
+ "id_usuario":"USR_1"}
+```
+`imagen` es un data URL completo (`data:<mime>;base64,<datos>`), tal cual lo entrega
+`FileReader.readAsDataURL()` — funciona con fotos (`image/*`) y PDF. `tipo` ∈ `oc |
+factura`. Requiere que quien llama tenga perfil `Infraestructura` o `Bodega`
+(`permisoBodega`).
+
+Respuesta para `tipo:"oc"`:
+```json
+{"status":"ok", "datos":{
+  "empresa":"Constructora Ejemplo SpA", "rut_empresa":"76.111.222-3",
+  "numero_oc":"OC-2026-045", "id_licitacion":"LIC-12", "fecha":"2026-09-17",
+  "items":[{"descripcion":"Pintura fachada", "unidad":"m2", "cantidad":120, "monto":850000}]
+}}
+```
+Respuesta para `tipo:"factura"`:
+```json
+{"status":"ok", "datos":{
+  "empresa":"Ferretería Ejemplo Ltda", "rut_empresa":"77.333.444-5",
+  "numero_documento":"FAC-9001", "fecha":"2026-09-17",
+  "items":[{"descripcion":"Tubo LED 18W", "unidad":"unidad", "cantidad":10, "valor_unitario":4300}]
+}}
+```
+El frontend intenta emparejar `empresa`/cada `descripcion` de ítem contra los catálogos
+ya cargados (`cat.empresas` / `inv.materiales`) por coincidencia de nombre; si no
+encuentra match, deja el campo vacío para que el usuario lo complete a mano — nunca crea
+registros nuevos automáticamente ni guarda nada sin que el usuario revise y confirme.
+
+**Requiere configurar una API key de Gemini** (gratis) para que esta acción funcione:
+1. Genera una key en https://aistudio.google.com/apikey (cuenta de Google, sin costo).
+2. En el editor de Apps Script: **Extensiones → Propiedades del proyecto → Propiedades
+   del script → Agregar propiedad del script**, nombre `GEMINI_API_KEY`, valor la key.
+3. Sin esta propiedad configurada, la acción responde
+   `{"status":"error","message":"Falta configurar GEMINI_API_KEY..."}` y el botón "Leer
+   con IA" muestra ese mensaje — el resto de la app sigue funcionando normal.
+
+---
+
 ## Notas de implementación
 
 - Todas las acciones nuevas siguen exactamente el mismo patrón resiliente que ya usan
