@@ -5,8 +5,11 @@
 //     Sin cambios en la estrategia de cache: las libs de Analítica (SheetJS/Chart.js,
 //     cdnjs.cloudflare.com) ya caen en la rama "Assets" cache-first genérica de abajo,
 //     así que quedan disponibles offline después del primer uso online.
-const CACHE = 'levantapp-v5';
-const BASE = '/levantamiento-colegios/';
+// v6: BASE se calcula desde self.registration.scope en vez de venir hardcodeado a
+//     /levantamiento-colegios/ — así el sitio funciona sin cambios sin importar en qué
+//     carpeta/dominio lo publique IT (ej. www.empresa.cl/levantapp/).
+const CACHE = 'levantapp-v6';
+const BASE = self.registration.scope;
 const ASSETS = [
   BASE,
   BASE + 'index.html',
