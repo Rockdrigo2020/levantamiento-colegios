@@ -850,6 +850,29 @@
       <!-- Reportería -->
       <div class="subpanel" id="ges-reportes">
         <div class="card mb-3">
+          <div class="card-title mb-3">📋 Reporte de mantención por colegio</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Genera el detalle de mantención de un establecimiento en un rango de fechas —
+            trabajos subsanados (con acción, materiales usados y foto de después) y,
+            opcionalmente, los que aún están pendientes.</p>
+          <div class="mb-3"><label>Establecimiento</label>
+            <select id="rpc-estab"><option value="">Selecciona un colegio...</option></select></div>
+          <div class="grid-2 mb-3">
+            <div><label>Desde</label><input type="date" id="rpc-desde"></div>
+            <div><label>Hasta</label><input type="date" id="rpc-hasta"></div>
+          </div>
+          <label class="flex" style="align-items:center;gap:8px;margin-bottom:12px">
+            <input type="checkbox" id="rpc-pendientes" style="width:auto">
+            <span style="font-size:13px">Incluir pendientes (no solo subsanados)</span>
+          </label>
+          <button class="btn btn-primary mb-3" onclick="generarReporteColegio()">📄 Generar reporte</button>
+          <div id="rpc-resumen"></div>
+          <div id="rpc-acciones" style="display:none">
+            <button class="btn btn-primary mb-3" onclick="exportarReporteColegioExcel()">⬇️ Descargar Excel</button>
+            <button class="btn btn-ghost" onclick="exportarReporteColegioPDF()">📎 Adjuntar / Vista para PDF</button>
+          </div>
+        </div>
+        <div class="card mb-3">
           <div class="card-title mb-3">Exportar reporte de la red</div>
           <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
             Genera un Excel con pendientes por comuna y establecimiento, costo y consumo de materiales,
@@ -1160,6 +1183,7 @@ function matchEmpresaPorNombre(nombre) {
       || lista.find(x=>d.includes(normTxt(x.nombre)) || normTxt(x.nombre).includes(d))
       || null;
 }
+const nomAccion = id => (cat?.acciones||[]).find(a=>a.id_accion==id)?.descripcion || id || '—';
 function accionesDe(idEspec) {
   const a = (cat?.acciones||[]).filter(x=>x.id_especifico==idEspec);
   const otras = (cat?.acciones||[]).filter(x=>!x.id_especifico);
@@ -2542,6 +2566,120 @@ async function guardarCatalogo(tipo) {
   pintarAdminCatalogo(tipo); if(tipo==='material') poblarRecepcionSelect();
 }
 
+// ==================== REPORTE DE MANTENCIÓN POR COLEGIO ====================
+function filtrosReporteColegio() {
+  return {
+    idEstab: document.getElementById('rpc-estab').value,
+    desde: document.getElementById('rpc-desde').value,
+    hasta: document.getElementById('rpc-hasta').value,
+    incluirPendientes: document.getElementById('rpc-pendientes').checked
+  };
+}
+// Cada ticket subsanado o no, con su última subsanación asociada (si tiene alguna).
+function ticketsReporteColegio(f) {
+  const dDesde = f.desde ? new Date(f.desde+'T00:00:00') : null;
+  const dHasta = f.hasta ? new Date(f.hasta+'T23:59:59') : null;
+  return obs.filter(o=>{
+    if (f.idEstab && o.id_establecimiento !== f.idEstab) return false;
+    const fr = new Date(o.fecha_registro);
+    if (dDesde && fr < dDesde) return false;
+    if (dHasta && fr > dHasta) return false;
+    const subsanado = o.estado === 'Ejecutado' || o.estado === 'Cerrado';
+    if (!f.incluirPendientes && !subsanado) return false;
+    return true;
+  }).map(o => ({ o, s: subs.filter(x=>x.id_local_obs===o.id_local).slice(-1)[0] }));
+}
+function construirFilasReporteColegio(f) {
+  return ticketsReporteColegio(f).map(({o,s}) => ({
+    Ticket: o.ticket||'', Recinto: nomRecinto(o.id_recinto)||o.nombre_espacio||'—',
+    Elemento: nomEspec(o.id_especifico), Cantidad: o.cantidad||1,
+    Prioridad: o.prioridad, Estado: o.estado, Fecha_reporte: fechaCL(o.fecha_registro),
+    Descripcion_falla: o.descripcion||'',
+    Subsanado: (o.estado==='Ejecutado'||o.estado==='Cerrado') ? 'SI' : 'NO',
+    Accion_ejecutada: s ? nomAccion(s.id_accion) : '',
+    Detalle_trabajo: s ? (s.detalle_trabajo||'') : '',
+    Fecha_subsanacion: s ? fechaCL(s.fecha_ejecucion) : '',
+    Ejecutado_por: s ? nomUsuario(s.id_usuario_ejecuta) : '',
+    Materiales_usados: s && s.materiales?.length
+      ? s.materiales.map(m=>m.cantidad+' '+uniMat(m.id_material)+' '+nomMat(m.id_material)).join(' · ') : '',
+    Validado: s ? (s.validado ? 'SI' : 'NO') : ''
+  }));
+}
+function generarReporteColegio() {
+  const f = filtrosReporteColegio();
+  if (!f.idEstab) { toast('⚠️ Selecciona un colegio','err'); return; }
+  const pares = ticketsReporteColegio(f);
+  const subsanados = pares.filter(({o})=>o.estado==='Ejecutado'||o.estado==='Cerrado').length;
+  document.getElementById('rpc-resumen').innerHTML = pares.length ? `
+    <div class="stat-grid mb-3">
+      <div class="stat-box"><div class="stat-num">${pares.length}</div><div class="stat-label">Tickets en el rango</div></div>
+      <div class="stat-box"><div class="stat-num">${subsanados}</div><div class="stat-label">Subsanados</div></div>
+    </div>
+    ${pares.map(({o})=>`
+      <div class="record-item" style="cursor:default">
+        <div class="record-name">${esc(o.ticket||'sin ticket')} — ${esc(nomEspec(o.id_especifico))}</div>
+        <div class="record-meta">${esc(fechaCL(o.fecha_registro))} · ${chipPri(o.prioridad)}<span class="chip">${esc(o.estado)}</span></div>
+      </div>`).join('')}`
+    : '<p style="color:var(--muted);font-size:12px">Sin tickets en ese rango con esos filtros.</p>';
+  document.getElementById('rpc-acciones').style.display = pares.length ? '' : 'none';
+}
+function exportarReporteColegioExcel() {
+  if (typeof XLSX === 'undefined') { toast('⚠️ Sin conexión para cargar el motor de Excel','err'); return; }
+  const f = filtrosReporteColegio();
+  const filas = construirFilasReporteColegio(f);
+  if (!filas.length) { toast('⚠️ No hay datos para exportar','err'); return; }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Mantención');
+  const nombreArchivo = (nomEstab(f.idEstab)||'colegio').replace(/[^a-z0-9]+/gi,'_');
+  XLSX.writeFile(wb, 'mantencion_'+nombreArchivo+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('✅ Excel descargado','ok');
+}
+// Vista imprimible/adjuntable con fotos de antes/después — pensada para enviar por correo
+// o entregar impresa al establecimiento como respaldo de la mantención realizada.
+async function exportarReporteColegioPDF() {
+  const f = filtrosReporteColegio();
+  const pares = ticketsReporteColegio(f);
+  if (!pares.length) { toast('⚠️ No hay datos para exportar','err'); return; }
+  const fotos = await Promise.all(pares.map(async ({o,s}) => ({
+    antes: await photoURL(o.foto_antes),
+    despues: s ? await photoURL(s.foto_despues) : null
+  })));
+  const w = window.open('', '_blank');
+  const rango = (f.desde||'sin fecha inicial') + ' a ' + (f.hasta||'sin fecha final');
+  w.document.write(`<html><head><title>Reporte de mantención — ${esc(nomEstab(f.idEstab))}</title><style>
+    body{font-family:sans-serif;padding:20px;color:#0f172a}
+    h2{margin-bottom:2px} .sub{color:#64748b;font-size:13px;margin-bottom:20px}
+    .ticket{border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:16px;page-break-inside:avoid}
+    .ticket h3{margin:0 0 4px;font-size:15px} .meta{font-size:12px;color:#64748b;margin-bottom:8px}
+    .row{display:flex;gap:12px;margin-top:8px} .row img{width:48%;border-radius:6px;object-fit:cover;max-height:220px}
+    .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:#f1f5f9;margin-right:6px}
+    .label{font-weight:700;font-size:12px;margin-top:6px}
+    .pend{color:#b45309;font-weight:700;font-size:12px}</style></head><body>
+    <h2>Reporte de mantención — ${esc(nomEstab(f.idEstab))}</h2>
+    <p class="sub">Rango: ${esc(rango)} · ${f.incluirPendientes?'Subsanados y pendientes':'Solo subsanados'} · Generado ${new Date().toLocaleDateString('es-CL')}</p>
+    ${pares.map(({o,s},i)=>{
+      const subsanado = o.estado==='Ejecutado'||o.estado==='Cerrado';
+      return `<div class="ticket">
+        <h3>${esc(o.ticket||'sin ticket')} — ${esc(nomEspec(o.id_especifico))}${o.cantidad>1?' × '+esc(o.cantidad):''}</h3>
+        <div class="meta">${esc(fechaCL(o.fecha_registro))} · ${esc(nomRecinto(o.id_recinto)||o.nombre_espacio||'—')} ·
+          <span class="chip">${esc(o.prioridad)}</span><span class="chip">${esc(o.estado)}</span></div>
+        <div class="label">Falla reportada</div>
+        <p>${esc(o.descripcion||'—')}</p>
+        ${subsanado ? `
+          <div class="label">Trabajo ejecutado${s?' — '+esc(fechaCL(s.fecha_ejecucion))+' · '+esc(nomUsuario(s.id_usuario_ejecuta)):''}</div>
+          <p>${esc(s?.detalle_trabajo||'—')}</p>
+          ${s?.materiales?.length ? `<p style="font-size:12px;color:#64748b">Materiales: ${esc(s.materiales.map(m=>m.cantidad+' '+uniMat(m.id_material)+' '+nomMat(m.id_material)).join(' · '))}</p>`:''}
+        ` : `<p class="pend">⏳ PENDIENTE DE SUBSANAR</p>`}
+        <div class="row">
+          ${fotos[i].antes?`<img src="${fotos[i].antes}">`:''}
+          ${fotos[i].despues?`<img src="${fotos[i].despues}">`:''}
+        </div>
+      </div>`;
+    }).join('')}
+    </body></html>`);
+  w.document.close(); w.focus(); w.print();
+}
+
 // ==================== REPORTERÍA ====================
 function construirFilasReporte() {
   return obs.map(o=>({
@@ -2830,6 +2968,19 @@ function refrescarTodo() {
       usados.map(e=>`<option value="${esc(e)}">${esc(nomEstab(e))}</option>`).join('');
     sel.value = cur;
   });
+
+  // Selector del reporte por colegio: se listan TODOS los establecimientos del catálogo
+  // (no solo los que ya tienen tickets), ordenados por comuna, para poder generar un
+  // reporte de cualquier colegio de la red.
+  const rpcSel = document.getElementById('rpc-estab');
+  if (rpcSel) {
+    const cur = rpcSel.value;
+    const estabs = (cat?.establecimientos||[]).slice()
+      .sort((a,b)=>(nomComuna(a.id_comuna)+a.nombre).localeCompare(nomComuna(b.id_comuna)+b.nombre));
+    rpcSel.innerHTML = '<option value="">Selecciona un colegio...</option>' +
+      estabs.map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('');
+    rpcSel.value = cur;
+  }
 
   pintarCola(); renderPendientes(); renderRegistros();
 }
