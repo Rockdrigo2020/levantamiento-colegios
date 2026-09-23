@@ -576,6 +576,7 @@
     <button class="tab-btn" id="tab-bodega" onclick="showTab('bodega')">Bodega</button>
     <button class="tab-btn" id="tab-registros" onclick="showTab('registros')">Tickets</button>
     <button class="tab-btn" id="tab-gestion" onclick="showTab('gestion')">Gestión</button>
+    <button class="tab-btn" id="tab-seguimiento" onclick="showTab('seguimiento')">📈 Seguimiento</button>
   </div>
 
   <main>
@@ -797,6 +798,7 @@
         <button class="subtab-btn" data-sp="ges-admin" onclick="showSub('gestion','ges-admin')">⚙️ Administración</button>
         <button class="subtab-btn" data-sp="ges-reportes" onclick="showSub('gestion','ges-reportes')">📊 Reportería</button>
         <button class="subtab-btn" data-sp="ges-analitica" onclick="showSub('gestion','ges-analitica')">🤖 Analítica IA</button>
+        <button class="subtab-btn" data-sp="ges-asignaciones" onclick="showSub('gestion','ges-asignaciones')">🧭 Asignaciones</button>
       </div>
 
       <!-- Bandeja de observaciones (toda la red) -->
@@ -931,6 +933,60 @@
           </div>
         </div>
       </div>
+
+      <!-- Asignaciones (Módulo 7 · Coordinación): qué colegio(s) atiende cada Maestro/Director -->
+      <div class="subpanel" id="ges-asignaciones">
+        <div class="card mb-3">
+          <div class="card-title mb-3">🧭 Asignar colegios a Maestros / Directores</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Define qué establecimiento(s) debe atender cada usuario de terreno. Con al menos
+            una asignación activa, esa persona solo ve y puede subsanar los tickets de sus
+            colegios asignados; sin asignaciones, mantiene visibilidad de toda la red.</p>
+          <div class="grid-2 mb-3">
+            <div><label>Usuario</label><select id="asig-usuario"></select></div>
+            <div><label>Establecimiento</label><select id="asig-estab"></select></div>
+          </div>
+          <button class="btn btn-primary" onclick="guardarAsignacion()">➕ Asignar</button>
+        </div>
+        <div class="card">
+          <div class="card-title mb-3">Asignaciones activas</div>
+          <div id="asig-lista"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- SEGUIMIENTO (Módulo 7, exclusivo Infraestructura) ---------- -->
+    <div id="tab-content-seguimiento" style="display:none">
+      <div class="card mb-3">
+        <div class="card-title mb-3">📈 Seguimiento y control de gestión</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+          Costos de materiales, horas hombre y tiempos de respuesta invertidos por
+          establecimiento, con desglose por recinto (ej. cuánto se ha gastado y cuántas
+          tareas se han resuelto en los baños de un colegio en particular).</p>
+        <div class="grid-2 mb-3">
+          <div><label>Establecimiento</label>
+            <select id="seg-estab" onchange="cambiarEstabSeguimiento()"><option value="">Toda la red</option></select></div>
+          <div><label>Recinto</label>
+            <select id="seg-recinto" onchange="pintarSeguimiento()"><option value="">Todos</option></select></div>
+        </div>
+      </div>
+      <div class="kpi-grid mb-3" id="seg-kpis"></div>
+      <div class="card mb-3">
+        <div class="card-title">Tareas pendientes vs. resueltas</div>
+        <canvas id="seg-chart-tareas" height="200"></canvas>
+      </div>
+      <div class="card mb-3">
+        <div class="card-title">Costo de materiales invertido</div>
+        <canvas id="seg-chart-costo" height="200"></canvas>
+      </div>
+      <div class="card mb-3">
+        <div class="card-title">Horas hombre trabajadas</div>
+        <canvas id="seg-chart-horas" height="200"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title mb-3">Detalle por establecimiento</div>
+        <div id="seg-tabla" style="overflow-x:auto"></div>
+      </div>
     </div>
   </main>
 </div>
@@ -969,7 +1025,8 @@ const LS = {
   cfg:'lev_config', ses:'lev_sesion', cat:'lev_catalogos',
   obs:'lev_obs', sub:'lev_sub', cola:'lev_cola', tema:'theme',
   inv:'lev_inv', bodcola:'lev_bodcola', ocs:'lev_ocs',
-  validcola:'lev_validcola', admincola:'lev_admincola'
+  validcola:'lev_validcola', admincola:'lev_admincola',
+  asig:'lev_asig', asigcola:'lev_asigcola'
 };
 const leerLS = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch(e) { return def; } };
 
@@ -1006,6 +1063,11 @@ let adminCola = leerLS(LS.admincola, []);   // altas/ediciones de usuarios y cat
 
 // ---- Módulo 6 · Analítica IA ----
 let iaData = null, iaCols = null, iaFiltros = {}, iaCharts = {c1:null, c2:null};
+
+// ---- Módulo 7 · Coordinación y Seguimiento ----
+let asignaciones = leerLS(LS.asig, []);   // {id_local, id_usuario, id_establecimiento, activa}
+let asigCola     = leerLS(LS.asigcola, []);
+let segCharts    = {};                    // instancias Chart.js del tablero de Seguimiento
 
 // ==================== UTILIDADES ====================
 function esc(v) {
@@ -1103,15 +1165,19 @@ function entrarApp() {
   document.getElementById('screen-app').classList.add('on');
   document.getElementById('hdr-user').textContent = sesion.nombre + ' · ' + sesion.perfil;
   const p = sesion.perfil;
-  // El Maestro no levanta observaciones nuevas, solo subsana; Bodega tampoco levanta
-  document.getElementById('tab-levantamiento').style.display = (p==='Maestro'||p==='Bodega') ? 'none' : '';
-  // El Director no subsana; Bodega tampoco
-  document.getElementById('tab-subsanacion').style.display  = (p==='Director'||p==='Bodega') ? 'none' : '';
+  // El Maestro no levanta observaciones nuevas, solo subsana; Bodega y Coordinador tampoco levantan
+  document.getElementById('tab-levantamiento').style.display = (p==='Maestro'||p==='Bodega'||p==='Coordinador') ? 'none' : '';
+  // El Director no subsana; Bodega y Coordinador tampoco
+  document.getElementById('tab-subsanacion').style.display  = (p==='Director'||p==='Bodega'||p==='Coordinador') ? 'none' : '';
   // Bodega (Módulo 3): Infraestructura y el propio Encargado de bodega
   document.getElementById('tab-bodega').style.display = (p==='Infraestructura'||p==='Bodega') ? '' : 'none';
-  // Gestión y control (Módulo 5): acceso exclusivo Infraestructura
-  document.getElementById('tab-gestion').style.display = p==='Infraestructura' ? '' : 'none';
-  if (p!=='Bodega') iniciarLevantamiento();
+  // Gestión y control (Módulo 5): Infraestructura, y Coordinador solo ve el subtab Asignaciones
+  document.getElementById('tab-gestion').style.display = (p==='Infraestructura'||p==='Coordinador') ? '' : 'none';
+  document.querySelectorAll('#gestion-subtabs .subtab-btn:not([data-sp="ges-asignaciones"])')
+    .forEach(b => b.style.display = p==='Coordinador' ? 'none' : '');
+  // Seguimiento (Módulo 7): tablero de control, exclusivo Infraestructura
+  document.getElementById('tab-seguimiento').style.display = p==='Infraestructura' ? '' : 'none';
+  if (p!=='Bodega' && p!=='Coordinador') iniciarLevantamiento();
   refrescarTodo();
   if (navigator.onLine) sincronizarTodo(true);
   else { pintarInventario(); }
@@ -1519,10 +1585,20 @@ async function guardarEmergencia() {
 }
 
 // ==================== SUBSANACIÓN ====================
+// Si el Coordinador le asignó colegios al Maestro logueado, acota qué tickets ve/subsana en
+// toda la app (defensa en profundidad además del filtro que ya aplica el servidor en pull()).
+// Sin asignaciones activas, no restringe nada (visibilidad de red como hasta ahora).
+function scopedObs() {
+  if (sesion.perfil === 'Maestro' && sesion.establecimientos_asignados?.length) {
+    const set = {}; sesion.establecimientos_asignados.forEach(id=>set[id]=1);
+    return obs.filter(o=>set[o.id_establecimiento]);
+  }
+  return obs;
+}
 function renderPendientes() {
   const q = (document.getElementById('sub-search').value||'').toLowerCase();
   const fe = document.getElementById('sub-filter-estab').value;
-  let lista = obs.filter(o=>o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Reabierto');
+  let lista = scopedObs().filter(o=>o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Reabierto');
   if (fe) lista = lista.filter(o=>o.id_establecimiento==fe);
   if (q) lista = lista.filter(o=>
     (o.ticket||'').toLowerCase().includes(q) ||
@@ -1608,6 +1684,11 @@ function openSubsanacionModal(idLocal) {
       <select id="sub-resuelto"><option value="si">Sí, cerrar el ticket</option>
         <option value="no">No, queda EN PROCESO (falta material o especialista)</option></select></div>
 
+    <div class="mb-3"><label>Horas hombre trabajadas</label>
+      <input type="number" id="sub-horas" min="0" step="0.5" placeholder="Ej: 2.5">
+      <p style="font-size:11px;color:var(--muted);margin-top:4px">Se usa en el tablero de Seguimiento para estimar tiempos y costos de mano de obra.</p>
+    </div>
+
     <button class="btn btn-success" onclick="guardarSubsanacion()">✅ Registrar subsanación</button>
     <button class="btn btn-ghost mt-3" onclick="closeModal('modal-subsanacion')">Cancelar</button>`;
   pintarMateriales();
@@ -1680,6 +1761,7 @@ async function guardarSubsanacion() {
     resuelto: resuelto,
     materiales: materiales,
     validado: infra,
+    horas: +document.getElementById('sub-horas').value || 0,
     synced:false
   };
   subs.push(s); guardar(LS.sub, subs);
@@ -1704,7 +1786,7 @@ function renderRegistros() {
   const q  = (document.getElementById('reg-search').value||'').toLowerCase();
   const fe = document.getElementById('reg-filter-estado').value;
   const fb = document.getElementById('reg-filter-estab').value;
-  let lista = [...obs].reverse();
+  let lista = [...scopedObs()].reverse();
   if (fe) lista = lista.filter(o=>o.estado===fe);
   if (fb) lista = lista.filter(o=>o.id_establecimiento==fb);
   if (q)  lista = lista.filter(o=>
@@ -1861,6 +1943,11 @@ async function enviarUno(tipo, id) {
     payload = {action:tipo, data: item};
     onOk = () => { item.synced = true; guardar(LS.admincola, adminCola); };
 
+  } else if (tipo === 'asignacion_guardar') {
+    const item = asigCola.find(x=>x.id_local===id); if (!item) return true;
+    payload = {action:'asignacion_guardar', data: item};
+    onOk = () => { item.synced = true; guardar(LS.asigcola, asigCola); };
+
   } else return true;
 
   const r = await api(payload);
@@ -1897,9 +1984,11 @@ async function sincronizarTodo(silencioso) {
 
   // 2) Refrescar catálogos y bajar tickets del servidor
   await bajarCatalogos();
-  // Infraestructura ve toda la red; los demás perfiles solo su propio establecimiento
+  // Infraestructura ve toda la red; el Director su propio establecimiento; el Maestro los
+  // colegios que el Coordinador le asignó (si no tiene ninguno, también ve toda la red).
   const soloMiEstab = sesion.perfil !== 'Infraestructura' ? sesion.id_establecimiento : undefined;
-  const r = await api({action:'pull', perfil:sesion.perfil, id_establecimiento:soloMiEstab});
+  const r = await api({action:'pull', perfil:sesion.perfil, id_establecimiento:soloMiEstab,
+                        id_establecimientos: sesion.establecimientos_asignados||[]});
   if (r && r.status==='ok') fusionar(r);
 
   // 3) Bodega: stock de materiales y herramientas, saldos y custodia
@@ -1920,6 +2009,16 @@ async function sincronizarTodo(silencioso) {
         else ocs.push(Object.assign({}, srvOc, {synced:true}));
       });
       guardar(LS.ocs, ocs);
+    }
+  }
+
+  // 5) Asignaciones (Módulo 7 · Coordinación): solo quien administra colegios por gestor
+  if (sesion.perfil === 'Infraestructura' || sesion.perfil === 'Coordinador') {
+    const ra = await api({action:'asignacion_pull', id_usuario:sesion.id_usuario});
+    if (ra && ra.status==='ok') {
+      asignaciones = ra.asignaciones||[];
+      guardar(LS.asig, asignaciones);
+      if (cat) { cat.usuarios_asignables = ra.usuarios||[]; guardar(LS.cat, cat); }
     }
   }
 
@@ -1952,6 +2051,40 @@ function fusionar(r) {
     }
   });
   guardar(LS.obs, obs);
+
+  // Subsanaciones registradas desde OTRO dispositivo: sin esto, Infraestructura no vería el
+  // detalle (ni el tablero de Seguimiento podría costear) del trabajo que hizo un Maestro en
+  // su propio teléfono. Los materiales usados viajan aparte (r.materiales_usados) y se
+  // reagrupan aquí por id_subsanacion.
+  const matsPorSub = {};
+  (r.materiales_usados||[]).forEach(m=>{
+    (matsPorSub[m.id_subsanacion] = matsPorSub[m.id_subsanacion]||[])
+      .push({id_material:m.id_material, cantidad:+m.cantidad||0});
+  });
+  (r.subsanaciones||[]).forEach(srv=>{
+    const local = subs.find(s=>s.id_subsanacion===srv.id_subsanacion);
+    const materialesSrv = matsPorSub[srv.id_subsanacion] || [];
+    if (local) {
+      if (local.synced) {
+        local.detalle_trabajo = srv.detalle_trabajo;
+        local.resuelto = srv.resuelto === 'SI';
+        local.validado = srv.validado === 'SI';
+        local.horas = +srv.horas || 0;
+        if (materialesSrv.length) local.materiales = materialesSrv;
+      }
+    } else {
+      subs.push({
+        id_subsanacion: srv.id_subsanacion,
+        id_local_obs: (obs.find(o=>o.ticket===srv.ticket)||{}).id_local || '',
+        ticket: srv.ticket, id_accion: srv.id_accion, detalle_trabajo: srv.detalle_trabajo,
+        foto_despues: srv.foto_despues_url || '', fecha_ejecucion: srv.fecha_ejecucion,
+        id_usuario_ejecuta: srv.id_usuario_ejecuta, resuelto: srv.resuelto === 'SI',
+        validado: srv.validado === 'SI', materiales: materialesSrv, horas: +srv.horas || 0,
+        synced:true
+      });
+    }
+  });
+  guardar(LS.sub, subs);
 }
 
 function pintarCola() {
@@ -1968,7 +2101,7 @@ setInterval(()=>{ if(navigator.onLine && cola.length && sesion) sincronizarTodo(
 function showSub(grupo, id) {
   const map = {
     bodega: ['bod-inventario','bod-entregar','bod-custodia','bod-recepcion'],
-    gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-reportes','ges-analitica'],
+    gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-reportes','ges-analitica','ges-asignaciones'],
     admin: ['adm-usuarios','adm-materiales','adm-herramientas','adm-empresas']
   }[grupo];
   const barId = grupo==='admin' ? 'admin-subtabs' : grupo+'-subtabs';
@@ -1982,7 +2115,8 @@ function showSub(grupo, id) {
     'ges-bandeja': pintarBandejaGestion, 'ges-validacion': pintarValidacionCierres, 'ges-oc': pintarOCList,
     'adm-usuarios': pintarAdminUsuarios, 'adm-materiales': ()=>pintarAdminCatalogo('material'),
     'adm-herramientas': ()=>pintarAdminCatalogo('herramienta'), 'adm-empresas': ()=>pintarAdminCatalogo('empresa'),
-    'ges-reportes': pintarResumenReporte
+    'ges-reportes': pintarResumenReporte,
+    'ges-asignaciones': pintarAsignaciones
   };
   if (refrescos[id]) refrescos[id]();
 }
@@ -2495,7 +2629,7 @@ function abrirFormUsuario(u) {
     <div class="mb-3"><label>Clave ${u.id_usuario?'(dejar vacío para no cambiar)':''}</label><input type="password" id="us-clave"></div>
     <div class="mb-3"><label>Perfil</label>
       <select id="us-perfil">
-        ${['Director','Maestro','Infraestructura','Bodega'].map(p=>`<option value="${p}" ${u.perfil===p?'selected':''}>${p}</option>`).join('')}
+        ${['Director','Maestro','Infraestructura','Bodega','Coordinador'].map(p=>`<option value="${p}" ${u.perfil===p?'selected':''}>${p}</option>`).join('')}
       </select></div>
     <div class="mb-3"><label>Establecimiento (solo Director)</label>
       <select id="us-estab"><option value="">—</option>
@@ -3083,6 +3217,164 @@ function iaResponder(q) {
   return `No estoy seguro de haber entendido. Puedes preguntarme por el <b>total</b>, el <b>promedio</b>, el <b>${esc(iaCols.grupo||'grupo')}</b> con más ${esc(iaCols.metrica||'registros')}, pedirme un <b>resumen</b>, o decirme "filtra por…".`;
 }
 
+// ==================== MÓDULO 7 · COORDINACIÓN Y SEGUIMIENTO ====================
+// Coordinador (o Infraestructura) asigna colegios a Maestros/Directores; esa asignación
+// acota qué tickets baja/ve/subsana el usuario asignado en el resto de la app (ver
+// scopedObs() y el payload de 'pull' en sincronizarTodo()).
+function usuariosAsignables() { return cat?.usuarios_asignables || []; }
+
+function pintarAsignaciones() {
+  const selU = document.getElementById('asig-usuario');
+  const selE = document.getElementById('asig-estab');
+  const usuarios = usuariosAsignables();
+  selU.innerHTML = usuarios.length
+    ? usuarios.map(u=>`<option value="${esc(u.id_usuario)}">${esc(u.nombre)} · ${esc(u.perfil)}</option>`).join('')
+    : '<option value="">Sin usuarios Maestro/Director en el catálogo</option>';
+  selE.innerHTML = (cat?.establecimientos||[]).slice()
+    .sort((a,b)=>(nomComuna(a.id_comuna)+a.nombre).localeCompare(nomComuna(b.id_comuna)+b.nombre))
+    .map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('');
+
+  const activas = asignaciones.filter(a=>String(a.activa)!=='false');
+  const porUsuario = {};
+  activas.forEach(a=>{ (porUsuario[a.id_usuario] = porUsuario[a.id_usuario]||[]).push(a); });
+  document.getElementById('asig-lista').innerHTML = Object.keys(porUsuario).length
+    ? Object.entries(porUsuario).map(([idU, lista])=>{
+        const u = usuarios.find(x=>x.id_usuario===idU);
+        return `<div class="card mb-3" style="padding:12px">
+          <div class="card-title" style="margin-bottom:6px">${esc(u?u.nombre:idU)}${u?' · '+esc(u.perfil):''}</div>
+          ${lista.map(a=>`
+            <div class="flex" style="justify-content:space-between;align-items:center;padding:4px 0">
+              <span style="font-size:13px">${esc(nomEstab(a.id_establecimiento))}</span>
+              <button class="btn-icon" onclick="quitarAsignacion('${esc(a.id_local)}')">✕</button>
+            </div>`).join('')}
+        </div>`;
+      }).join('')
+    : '<p style="color:var(--muted);font-size:12px">Sin asignaciones activas — los Maestros ven toda la red por defecto.</p>';
+}
+async function guardarAsignacion() {
+  const idUsuario = document.getElementById('asig-usuario').value;
+  const idEstab   = document.getElementById('asig-estab').value;
+  if (!idUsuario) { toast('⚠️ Selecciona el usuario','err'); return; }
+  if (!idEstab)   { toast('⚠️ Selecciona el establecimiento','err'); return; }
+  const yaExiste = asignaciones.find(a=>a.id_usuario===idUsuario && a.id_establecimiento===idEstab && String(a.activa)!=='false');
+  if (yaExiste) { toast('⚠️ Ese usuario ya tiene asignado ese colegio','err'); return; }
+
+  const reg = {
+    id_local: uid('ASIG'), id_usuario: idUsuario, id_establecimiento: idEstab,
+    id_usuario_coordinador: sesion.id_usuario, fecha: new Date().toISOString(), activa: true, synced:false
+  };
+  asignaciones.push(reg); guardar(LS.asig, asignaciones);
+  asigCola.push(reg); guardar(LS.asigcola, asigCola);
+  encolar('asignacion_guardar', reg.id_local);
+  const ok = await enviarUno('asignacion_guardar', reg.id_local);
+  toast(ok ? '✅ Asignación guardada' : '💾 Guardada, se enviará sola', 'ok');
+  pintarAsignaciones();
+}
+async function quitarAsignacion(idLocal) {
+  const a = asignaciones.find(x=>x.id_local===idLocal); if (!a) return;
+  a.activa = false;
+  guardar(LS.asig, asignaciones);
+  let item = asigCola.find(x=>x.id_local===idLocal);
+  if (item) item.activa = false; else { item = Object.assign({}, a); asigCola.push(item); }
+  guardar(LS.asigcola, asigCola);
+  encolar('asignacion_guardar', idLocal);
+  const ok = await enviarUno('asignacion_guardar', idLocal);
+  toast(ok ? '✅ Asignación quitada' : '💾 Guardado, se enviará solo', 'ok');
+  pintarAsignaciones();
+}
+
+// ---- Tablero de Seguimiento: costos, horas hombre y tareas por colegio/recinto ----
+function costoSubsanacion(s) {
+  return (s.materiales||[]).reduce((tot,m)=>tot + (+m.cantidad||0) * (+objMat(m.id_material)?.costo_referencial||0), 0);
+}
+function cambiarEstabSeguimiento() {
+  const idEstab = document.getElementById('seg-estab').value;
+  const selR = document.getElementById('seg-recinto');
+  const recintos = idEstab ? (cat?.recintos||[]).filter(r=>r.id_establecimiento===idEstab) : [];
+  selR.innerHTML = '<option value="">Todos</option>' +
+    recintos.map(r=>`<option value="${esc(r.id_recinto)}">${esc(r.tipo_espacio)}${r.nombre_espacio?' — '+esc(r.nombre_espacio):''}</option>`).join('');
+  selR.value = '';
+  pintarSeguimiento();
+}
+function pintarSeguimiento() {
+  const selEstab = document.getElementById('seg-estab');
+  if (!selEstab.options.length || selEstab.options.length === 1) {
+    selEstab.innerHTML = '<option value="">Toda la red</option>' + (cat?.establecimientos||[]).slice()
+      .sort((a,b)=>(nomComuna(a.id_comuna)+a.nombre).localeCompare(nomComuna(b.id_comuna)+b.nombre))
+      .map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('');
+  }
+  const idEstab  = selEstab.value;
+  const idRecinto = document.getElementById('seg-recinto').value;
+
+  let lista = obs;
+  if (idEstab)   lista = lista.filter(o=>o.id_establecimiento===idEstab);
+  if (idRecinto) lista = lista.filter(o=>o.id_recinto===idRecinto);
+
+  const conSub = lista.map(o => ({o, s: subs.filter(x=>x.id_local_obs===o.id_local).slice(-1)[0]}));
+  const resueltas   = conSub.filter(({o})=>o.estado==='Ejecutado'||o.estado==='Cerrado').length;
+  const pendientes  = lista.length - resueltas;
+  const costoTotal  = conSub.reduce((t,{s})=>t + (s?costoSubsanacion(s):0), 0);
+  const horasTotal  = conSub.reduce((t,{s})=>t + (s?(+s.horas||0):0), 0);
+  const diasResp = conSub.filter(({s})=>s).map(({o,s})=>Math.max(0,(new Date(s.fecha_ejecucion)-new Date(o.fecha_registro))/86400000));
+  const diasProm = diasResp.length ? Math.round(diasResp.reduce((a,b)=>a+b,0)/diasResp.length) : 0;
+
+  document.getElementById('seg-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-val">${lista.length}</div><div class="kpi-lbl">Tareas totales</div></div>
+    <div class="kpi-card"><div class="kpi-val">${resueltas}</div><div class="kpi-lbl">Resueltas</div></div>
+    <div class="kpi-card"><div class="kpi-val">${pendientes}</div><div class="kpi-lbl">Pendientes</div></div>
+    <div class="kpi-card"><div class="kpi-val">${horasTotal.toFixed(1)}</div><div class="kpi-lbl">Horas hombre</div></div>
+    <div class="kpi-card"><div class="kpi-val">$${costoTotal.toLocaleString('es-CL')}</div><div class="kpi-lbl">Costo materiales</div></div>
+    <div class="kpi-card"><div class="kpi-val">${diasProm}</div><div class="kpi-lbl">Días prom. respuesta</div></div>`;
+
+  // Agrupa por establecimiento (si hay uno elegido, el "grupo" pasa a ser cada recinto suyo,
+  // para el drill-down que pide filtrar p.ej. por los baños de un colegio en particular).
+  const porGrupo = {};
+  conSub.forEach(({o,s})=>{
+    const clave = idEstab ? (nomRecinto(o.id_recinto)||o.nombre_espacio||'Sin recinto') : nomEstab(o.id_establecimiento);
+    if (!porGrupo[clave]) porGrupo[clave] = {resueltas:0, pendientes:0, costo:0, horas:0};
+    const g = porGrupo[clave];
+    if (o.estado==='Ejecutado'||o.estado==='Cerrado') g.resueltas++; else g.pendientes++;
+    if (s) { g.costo += costoSubsanacion(s); g.horas += (+s.horas||0); }
+  });
+  const grupos = Object.entries(porGrupo).sort((a,b)=>(b[1].resueltas+b[1].pendientes)-(a[1].resueltas+a[1].pendientes)).slice(0,12);
+  const labels = grupos.map(g=>g[0]);
+
+  dibujarSegChart('seg-chart-tareas', 'bar', labels, [
+    {label:'Resueltas', data:grupos.map(g=>g[1].resueltas), backgroundColor:'#22c55e'},
+    {label:'Pendientes', data:grupos.map(g=>g[1].pendientes), backgroundColor:'#f59e0b'}
+  ], {stacked:true});
+  dibujarSegChart('seg-chart-costo', 'bar', labels, [
+    {label:'Costo materiales ($)', data:grupos.map(g=>g[1].costo), backgroundColor:'#6366f1'}
+  ]);
+  dibujarSegChart('seg-chart-horas', 'bar', labels, [
+    {label:'Horas hombre', data:grupos.map(g=>g[1].horas.toFixed(1)), backgroundColor:'#0ea5e9'}
+  ]);
+
+  document.getElementById('seg-tabla').innerHTML = grupos.length ? `
+    <table class="mono" style="width:100%;font-size:12px;border-collapse:collapse">
+      <thead><tr style="text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:6px 8px">${idEstab?'Recinto':'Establecimiento'}</th>
+        <th style="padding:6px 8px">Resueltas</th><th style="padding:6px 8px">Pendientes</th>
+        <th style="padding:6px 8px">Horas</th><th style="padding:6px 8px">Costo</th></tr></thead>
+      <tbody>${grupos.map(([nombre,g])=>`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 8px">${esc(nombre)}</td><td style="padding:6px 8px">${g.resueltas}</td>
+        <td style="padding:6px 8px">${g.pendientes}</td><td style="padding:6px 8px">${g.horas.toFixed(1)}</td>
+        <td style="padding:6px 8px">$${g.costo.toLocaleString('es-CL')}</td></tr>`).join('')}</tbody>
+    </table>` : '<p style="color:var(--muted);font-size:12px">Sin datos para este filtro.</p>';
+}
+function dibujarSegChart(canvasId, tipo, labels, datasets, opts) {
+  const el = document.getElementById(canvasId);
+  if (!el || typeof Chart === 'undefined') return;
+  if (segCharts[canvasId]) segCharts[canvasId].destroy();
+  segCharts[canvasId] = new Chart(el.getContext('2d'), {
+    type: tipo, data: {labels, datasets},
+    options: {
+      responsive:true, plugins:{legend:{display:datasets.length>1}},
+      scales: (opts&&opts.stacked) ? {x:{stacked:true}, y:{stacked:true}} : {}
+    }
+  });
+}
+
 // ==================== UI GENERAL ====================
 function refrescarTodo() {
   const abiertas = obs.filter(o=>o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Ejecutado'||o.estado==='Reabierto');
@@ -3122,7 +3414,7 @@ function refrescarTodo() {
 }
 
 function showTab(t) {
-  ['dashboard','levantamiento','subsanacion','registros','bodega','gestion'].forEach(x=>{
+  ['dashboard','levantamiento','subsanacion','registros','bodega','gestion','seguimiento'].forEach(x=>{
     document.getElementById('tab-content-'+x).style.display = x===t ? 'block':'none';
     document.getElementById('tab-'+x).classList.toggle('active', x===t);
   });
@@ -3130,7 +3422,9 @@ function showTab(t) {
   if (t==='registros')   renderRegistros();
   if (t==='dashboard')   refrescarTodo();
   if (t==='bodega')      { poblarRecepcionSelect(); showSub('bodega','bod-inventario'); }
-  if (t==='gestion')     showSub('gestion','ges-bandeja');
+  // El Coordinador solo tiene acceso al subtab de Asignaciones dentro de Gestión
+  if (t==='gestion')     showSub('gestion', sesion.perfil==='Coordinador' ? 'ges-asignaciones' : 'ges-bandeja');
+  if (t==='seguimiento') pintarSeguimiento();
 }
 
 function guardarConfig() {

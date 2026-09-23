@@ -271,6 +271,59 @@ registros nuevos automáticamente ni guarda nada sin que el usuario revise y con
 
 ---
 
+## Acciones NUEVAS · Módulo 7 (Coordinación y Seguimiento)
+
+Nuevo perfil **Coordinador** (además de `Director | Maestro | Infraestructura | Bodega`):
+asigna qué establecimiento(s) debe atender cada Maestro/Director. Con al menos una
+asignación activa, ese usuario solo ve/sincroniza/subsana los tickets de sus colegios
+asignados (en toda la app: Subsanar, Tickets, lo que baja `pull`); sin asignaciones,
+mantiene la visibilidad de red completa de siempre. `permisoCoordinador()` acepta tanto
+`Coordinador` como `Infraestructura`.
+
+### `asignacion_pull`
+```json
+{"action":"asignacion_pull", "id_usuario":"USR_1"}
+```
+Requiere `permisoCoordinador`. Responde:
+```json
+{"status":"ok",
+ "asignaciones":[{"id_local":"ASIG_x","id_usuario":"USR_2","id_establecimiento":"E001",
+                   "id_usuario_coordinador":"USR_1","fecha":"...","activa":"true"}],
+ "usuarios":[{"id_usuario":"USR_2","nombre":"Pedro Maestro","perfil":"Maestro"}]}
+```
+
+### `asignacion_guardar`
+Crea o desactiva una asignación (idempotente por `id_local`).
+```json
+{"action":"asignacion_guardar", "data":{
+  "id_local":"ASIG_x", "id_usuario":"USR_2", "id_establecimiento":"E001",
+  "id_usuario_coordinador":"USR_1", "activa": true
+}}
+```
+`activa:false` es la forma de quitar una asignación sin perder el historial de la fila.
+
+### Cambios en acciones existentes
+- **`login`**: la respuesta ahora incluye `establecimientos_asignados` (arreglo de
+  `id_establecimiento`), calculado desde `ASIGNACION` en el momento del login.
+- **`catalogos`**: el arreglo `usuarios` ahora también viaja cuando quien pide es
+  `Coordinador` (antes solo `Infraestructura`).
+- **`pull`**: si `d.perfil==='Maestro'` y llega `d.id_establecimientos` (arreglo, no
+  vacío), filtra las observaciones a esos establecimientos — igual que ya hacía para
+  `Director` con `d.id_establecimiento` (singular). También suma `materiales_usados` a
+  la respuesta (ver más abajo).
+- **`SUBSANACION`**: nueva columna `horas` (horas hombre trabajadas), agregada **al
+  final** del `SCHEMA` por la misma razón de siempre (no desalinear filas existentes).
+
+### `materiales_usados` en la respuesta de `pull`
+Antes, `pull` no devolvía `MATERIAL_USADO`, así que un dispositivo (p. ej. el de
+Infraestructura) nunca veía qué materiales declaró un Maestro en una subsanación hecha
+desde SU propio teléfono — el tablero de Seguimiento no podría costear correctamente.
+Ahora `pull` también responde `materiales_usados: [{id_subsanacion, id_material,
+cantidad}, ...]` filtrado a las subsanaciones incluidas en la respuesta, y el frontend
+las reagrupa por `id_subsanacion` al fusionar (`fusionar()` en `index.html`).
+
+---
+
 ## Notas de implementación
 
 - Todas las acciones nuevas siguen exactamente el mismo patrón resiliente que ya usan

@@ -120,8 +120,11 @@ const SCHEMA = {
                         'id_gestor_asignado','es_emergencia','tipo_emergencia','continuidad_clases',
                         'justificacion','actualizado','cantidad'],
   // validado / fotos_despues_urls: agregados (loop de validación del Módulo 2 y galería multi-foto).
+  // horas: horas hombre trabajadas en la intervención (Módulo de Seguimiento) — agregada AL
+  // FINAL por el mismo motivo que 'cantidad' en OBSERVACION (ver comentario más arriba).
   SUBSANACION:         ['id_subsanacion','ticket','id_accion','detalle_trabajo','foto_despues_url',
-                        'fotos_despues_urls','fecha_ejecucion','id_usuario_ejecuta','resuelto','validado','actualizado'],
+                        'fotos_despues_urls','fecha_ejecucion','id_usuario_ejecuta','resuelto','validado','actualizado',
+                        'horas'],
   MATERIAL_USADO:      ['id','id_subsanacion','id_material','cantidad'],
   COMENTARIO:          ['id_comentario','ticket','id_usuario','texto','fecha'],
 
@@ -138,7 +141,15 @@ const SCHEMA = {
   EMPRESA:             ['id_empresa','nombre','rut'],
   OC:                  ['id_local','id_empresa','numero_oc','id_licitacion','estado','fecha','id_usuario','actualizado'],
   OC_PARTIDA:          ['id_local','id_oc','item','unidad','cantidad','monto','avance','foto_url','actualizado'],
-  VALIDACION:          ['id_local','id_local_obs','id_subsanacion','ticket','conforme','id_usuario_valida','fecha']
+  VALIDACION:          ['id_local','id_local_obs','id_subsanacion','ticket','conforme','id_usuario_valida','fecha'],
+
+  // ---- Módulo 7 · Coordinación y Seguimiento ----
+  // Asigna qué establecimiento(s) debe atender cada Maestro/Director; el perfil Coordinador
+  // (o Infraestructura) administra estas asignaciones. Un usuario puede tener varias filas
+  // activas (varios colegios a su cargo); 'activa' en 'false' es la forma de desasignar sin
+  // perder el historial.
+  ASIGNACION:          ['id_local','id_usuario','id_establecimiento','id_usuario_coordinador',
+                        'fecha','activa','actualizado']
 };
 
 // ============ ENTRYPOINTS ============
@@ -203,6 +214,9 @@ function doPost(e) {
       case 'validar_subsanacion':   return json(validarSubsanacion(d));
       case 'admin_usuario':         return json(adminUsuario(d));
       case 'admin_catalogo':        return json(adminCatalogo(d));
+      // ---- Módulo 7 · Coordinación y Seguimiento ----
+      case 'asignacion_pull':       return json(asignacionPull(d));
+      case 'asignacion_guardar':    return json(asignacionGuardar(d));
       default:            return json({status:'error', message:'accion desconocida: ' + d.action});
     }
   } catch (err) {
@@ -224,9 +238,15 @@ function login(d) {
   const u = filas.find(r => String(r.usuario).toLowerCase() === String(d.usuario || '').toLowerCase());
   if (!u || String(u.activo) === 'false') return {status:'error', message:'Usuario o clave incorrectos'};
   if (u.hash !== hash(d.clave || ''))     return {status:'error', message:'Usuario o clave incorrectos'};
+  // Colegios que el Coordinador le asignó a este usuario (Maestro/Director); vacío si no tiene
+  // asignaciones activas, en cuyo caso conserva la visibilidad de red completa que ya tenía.
+  const asignados = leer('ASIGNACION')
+    .filter(a => a.id_usuario === u.id_usuario && String(a.activa) !== 'false')
+    .map(a => a.id_establecimiento);
   return {status:'ok', usuario:{
     id_usuario: u.id_usuario, nombre: u.nombre, perfil: u.perfil,
-    id_establecimiento: u.id_establecimiento || ''
+    id_establecimiento: u.id_establecimiento || '',
+    establecimientos_asignados: asignados
   }};
 }
 
@@ -236,6 +256,7 @@ function catalogos(d) {
   d = d || {};
   const solicitante = d.id_usuario ? buscar('USUARIO', 'id_usuario', d.id_usuario) : null;
   const esInfra = !!(solicitante && solicitante.perfil === 'Infraestructura');
+  const esCoordinador = !!(solicitante && solicitante.perfil === 'Coordinador');
   return {
     status: 'ok',
     comunas:     leer('COMUNA'),
@@ -247,7 +268,7 @@ function catalogos(d) {
     materiales:  leer('MATERIAL'),
     herramientas: leer('HERRAMIENTA'),
     empresas:    leer('EMPRESA'),
-    usuarios: esInfra ? leer('USUARIO').map(u => ({
+    usuarios: (esInfra || esCoordinador) ? leer('USUARIO').map(u => ({
       id_usuario: u.id_usuario, nombre: u.nombre, usuario_login: u.usuario,
       perfil: u.perfil, id_establecimiento: u.id_establecimiento
     })) : [],
@@ -255,20 +276,30 @@ function catalogos(d) {
   };
 }
 
-/** Descarga observaciones. El Director solo ve su establecimiento. */
+/** Descarga observaciones. El Director solo ve su establecimiento; el Maestro, los que
+ *  el Coordinador le haya asignado (si no tiene asignaciones, mantiene visibilidad de red). */
 function pull(d) {
   let obs = leer('OBSERVACION');
   if (d.perfil === 'Director' && d.id_establecimiento) {
     obs = obs.filter(o => String(o.id_establecimiento) === String(d.id_establecimiento));
+  } else if (d.perfil === 'Maestro' && d.id_establecimientos && d.id_establecimientos.length) {
+    const set = {}; d.id_establecimientos.forEach(id => set[String(id)] = 1);
+    obs = obs.filter(o => set[String(o.id_establecimiento)]);
   }
   obs = obs.slice(-500);   // no traer histórico completo al móvil
   const tickets = {};
   obs.forEach(o => tickets[o.ticket] = 1);
+  const subsanaciones = leer('SUBSANACION').filter(s => tickets[s.ticket]);
+  const subIds = {};
+  subsanaciones.forEach(s => subIds[s.id_subsanacion] = 1);
   return {
     status:'ok',
     observaciones: obs,
-    subsanaciones: leer('SUBSANACION').filter(s => tickets[s.ticket]),
-    comentarios:   leer('COMENTARIO').filter(c => tickets[c.ticket])
+    subsanaciones: subsanaciones,
+    // Materiales usados por cada subsanación (Módulo 7 · Seguimiento necesita costear por
+    // colegio/recinto aunque la subsanación se haya registrado desde otro dispositivo).
+    materiales_usados: leer('MATERIAL_USADO').filter(m => subIds[m.id_subsanacion]),
+    comentarios: leer('COMENTARIO').filter(c => tickets[c.ticket])
   };
 }
 
@@ -345,7 +376,8 @@ function guardarSubsanacion(d) {
     id_usuario_ejecuta: s.id_usuario_ejecuta || '',
     resuelto: s.resuelto ? 'SI' : 'NO',
     validado: s.validado ? 'SI' : 'NO',
-    actualizado: new Date()
+    actualizado: new Date(),
+    horas: s.horas || ''
   });
   // Materiales: se reemplazan completos (idempotente ante reintentos)
   borrarPorClave('MATERIAL_USADO', 'id_subsanacion', s.id_subsanacion);
@@ -419,6 +451,10 @@ function permisoBodega(idUsuario) {
 function permisoInfraestructura(idUsuario) {
   const u = buscar('USUARIO', 'id_usuario', idUsuario);
   return !!(u && u.perfil === 'Infraestructura');
+}
+function permisoCoordinador(idUsuario) {
+  const u = buscar('USUARIO', 'id_usuario', idUsuario);
+  return !!(u && (u.perfil === 'Infraestructura' || u.perfil === 'Coordinador'));
 }
 
 function bodegaPull(d) {
@@ -700,6 +736,36 @@ function adminCatalogo(d) {
   } else if (c.tipo_catalogo === 'empresa') {
     upsert('EMPRESA', 'id_empresa', c.id_empresa, {id_empresa: c.id_empresa, nombre: c.nombre, rut: c.rut || ''});
   } else return {status:'error', message:'tipo_catalogo invalido'};
+  return {status:'ok'};
+}
+
+/* ======================================================================
+   MÓDULO 7 · COORDINACIÓN Y SEGUIMIENTO
+   El Coordinador (o Infraestructura) asigna qué establecimiento(s) debe
+   atender cada Maestro/Director; esas asignaciones acotan qué tickets
+   baja/ve ese usuario en el resto de la app (ver pull()).
+   ====================================================================== */
+
+function asignacionPull(d) {
+  if (!permisoCoordinador(d.id_usuario)) return {status:'error', message:'sin permiso para ver asignaciones'};
+  return {
+    status: 'ok',
+    asignaciones: leer('ASIGNACION').filter(a => String(a.activa) !== 'false'),
+    usuarios: leer('USUARIO')
+      .filter(u => u.perfil === 'Maestro' || u.perfil === 'Director')
+      .map(u => ({id_usuario: u.id_usuario, nombre: u.nombre, perfil: u.perfil}))
+  };
+}
+
+function asignacionGuardar(d) {
+  const a = d.data || {};
+  if (!permisoCoordinador(a.id_usuario_coordinador)) return {status:'error', message:'sin permiso para asignar'};
+  if (!a.id_local || !a.id_usuario || !a.id_establecimiento) return {status:'error', message:'faltan datos de la asignación'};
+  upsert('ASIGNACION', 'id_local', a.id_local, {
+    id_local: a.id_local, id_usuario: a.id_usuario, id_establecimiento: a.id_establecimiento,
+    id_usuario_coordinador: a.id_usuario_coordinador, fecha: a.fecha || new Date(),
+    activa: a.activa === false ? 'false' : 'true', actualizado: new Date()
+  });
   return {status:'ok'};
 }
 
