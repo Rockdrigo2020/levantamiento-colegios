@@ -217,8 +217,13 @@ exclusivo de Infraestructura, mismo chequeo de `id_usuario_actor`.
   "nombre":"Cinta aisladora", "unidad":"un", "minimo":5, "stock":0, "id_usuario_actor":"USR_1"
 }}
 ```
-`tipo_catalogo` ∈ `material | herramienta | empresa` (los campos varían según el tipo,
-ver `CATALOGO_CFG` en `index.html` para la lista exacta de campos por tipo).
+`tipo_catalogo` ∈ `material | herramienta | empresa | establecimiento` (los campos varían
+según el tipo, ver `CATALOGO_CFG` en `index.html` para la lista exacta de campos por tipo).
+Desde el Módulo 7 (Seguimiento), `establecimiento` permite crear colegios nuevos o editar
+uno existente (mismo `id_establecimiento`) para completarle comuna, RBD, dirección y
+**coordenadas** (`lat`/`lng`) — estas últimas alimentan el mapa de Seguimiento. `lat`/`lng`
+se agregaron **al final** de `SCHEMA.ESTABLECIMIENTO`, mismo motivo de siempre (no
+desalinear filas ya existentes).
 
 ---
 
@@ -291,6 +296,10 @@ Requiere `permisoCoordinador`. Responde:
                    "id_usuario_coordinador":"USR_1","fecha":"...","activa":"true"}],
  "usuarios":[{"id_usuario":"USR_2","nombre":"Pedro Maestro","perfil":"Maestro"}]}
 ```
+`usuarios` incluye perfiles `Maestro | Director | Infraestructura` (personal de terreno
+asignable). Asignarle un colegio a un `Infraestructura` **no** acota su acceso — sigue
+viendo toda la red en Gestión/Bodega/Reportería/Seguimiento — la asignación queda solo
+como registro de cobertura. Solo `Maestro` se acota de verdad (ver cambios en `pull`).
 
 ### `asignacion_guardar`
 Crea o desactiva una asignación (idempotente por `id_local`).

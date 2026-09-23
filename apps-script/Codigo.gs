@@ -99,7 +99,9 @@ const DRIVE_ID = '16p1X10k4_dP53NFFZj3tlotnftpRqZSm';            // carpeta Leva
 // ============ ESQUEMA ============
 const SCHEMA = {
   COMUNA:              ['id_comuna','nombre'],
-  ESTABLECIMIENTO:     ['id_establecimiento','id_comuna','rbd','nombre','tipo','direccion'],
+  // lat/lng: coordenadas para el mapa de Seguimiento (Módulo 7). Agregadas AL FINAL
+  // (mismo motivo que 'cantidad'/'horas' en otras tablas: no desalinear filas existentes).
+  ESTABLECIMIENTO:     ['id_establecimiento','id_comuna','rbd','nombre','tipo','direccion','lat','lng'],
   RECINTO:             ['id_recinto','id_establecimiento','tipo_espacio','nombre_espacio'],
   ELEMENTO_GENERAL:    ['id_general','nombre'],
   ELEMENTO_ESPECIFICO: ['id_especifico','id_general','nombre'],
@@ -735,6 +737,12 @@ function adminCatalogo(d) {
     });
   } else if (c.tipo_catalogo === 'empresa') {
     upsert('EMPRESA', 'id_empresa', c.id_empresa, {id_empresa: c.id_empresa, nombre: c.nombre, rut: c.rut || ''});
+  } else if (c.tipo_catalogo === 'establecimiento') {
+    upsert('ESTABLECIMIENTO', 'id_establecimiento', c.id_establecimiento, {
+      id_establecimiento: c.id_establecimiento, id_comuna: c.id_comuna || '', rbd: c.rbd || '',
+      nombre: c.nombre, tipo: c.tipo || '', direccion: c.direccion || '',
+      lat: c.lat || '', lng: c.lng || ''
+    });
   } else return {status:'error', message:'tipo_catalogo invalido'};
   return {status:'ok'};
 }
@@ -751,8 +759,12 @@ function asignacionPull(d) {
   return {
     status: 'ok',
     asignaciones: leer('ASIGNACION').filter(a => String(a.activa) !== 'false'),
+    // Maestro/Director/Infraestructura son asignables (personal de terreno). Asignarle un
+    // colegio a un Infraestructura queda solo como registro de "quién cubre qué colegio":
+    // a diferencia del Maestro, no le acota su visibilidad — sigue viendo toda la red, ya
+    // que ese perfil es también el admin exclusivo de Gestión/Bodega/Reportería/Seguimiento.
     usuarios: leer('USUARIO')
-      .filter(u => u.perfil === 'Maestro' || u.perfil === 'Director')
+      .filter(u => u.perfil === 'Maestro' || u.perfil === 'Director' || u.perfil === 'Infraestructura')
       .map(u => ({id_usuario: u.id_usuario, nombre: u.nombre, perfil: u.perfil}))
   };
 }
