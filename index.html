@@ -865,6 +865,10 @@
             <input type="checkbox" id="rpc-pendientes" style="width:auto">
             <span style="font-size:13px">Incluir pendientes (no solo subsanados)</span>
           </label>
+          <div class="grid-2 mb-3">
+            <div><label>Profesional responsable</label><input type="text" id="rpc-profesional" placeholder="Nombre completo"></div>
+            <div><label>Cargo / especialidad</label><input type="text" id="rpc-cargo" placeholder="Se sugiere según el tipo de falla"></div>
+          </div>
           <button class="btn btn-primary mb-3" onclick="generarReporteColegio()">📄 Generar reporte</button>
           <div id="rpc-resumen"></div>
           <div id="rpc-acciones" style="display:none">
@@ -2572,8 +2576,33 @@ function filtrosReporteColegio() {
     idEstab: document.getElementById('rpc-estab').value,
     desde: document.getElementById('rpc-desde').value,
     hasta: document.getElementById('rpc-hasta').value,
-    incluirPendientes: document.getElementById('rpc-pendientes').checked
+    incluirPendientes: document.getElementById('rpc-pendientes').checked,
+    profesional: document.getElementById('rpc-profesional').value.trim(),
+    cargo: document.getElementById('rpc-cargo').value.trim()
   };
+}
+// Sugiere el cargo/especialidad del profesional firmante "según corresponda" al tipo de
+// falla predominante entre los tickets del reporte (Eléctrico, Sanitario, obra civil, etc.).
+const ESPECIALIDAD_POR_GENERAL = {
+  'Electrico': 'Ingeniero(a) en Construcción, mención Eléctrica',
+  'Sanitario': 'Ingeniero(a) en Construcción, mención Sanitaria',
+  'Calefaccion': 'Ingeniero(a) en Construcción, mención Sanitaria',
+  'Techumbre': 'Ingeniero(a) Constructor(a)',
+  'Muros y Cielos': 'Ingeniero(a) Constructor(a)',
+  'Pisos y Pavimentos': 'Ingeniero(a) Constructor(a)',
+  'Puertas': 'Ingeniero(a) Constructor(a)',
+  'Cerrajeria': 'Ingeniero(a) Constructor(a)',
+  'Vidrios': 'Ingeniero(a) Constructor(a)',
+  'Seguridad y Emergencia': 'Ingeniero(a) en Prevención de Riesgos'
+};
+function especialidadSugerida(pares) {
+  const conteo = {};
+  pares.forEach(({o}) => {
+    const nombreGeneral = nomGeneral(objEspec(o.id_especifico)?.id_general);
+    if (nombreGeneral) conteo[nombreGeneral] = (conteo[nombreGeneral]||0) + 1;
+  });
+  const top = Object.entries(conteo).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
+  return ESPECIALIDAD_POR_GENERAL[top] || 'Encargado(a) de Infraestructura SLEP Puelche';
 }
 // Cada ticket subsanado o no, con su última subsanación asociada (si tiene alguna).
 function ticketsReporteColegio(f) {
@@ -2610,6 +2639,11 @@ function generarReporteColegio() {
   if (!f.idEstab) { toast('⚠️ Selecciona un colegio','err'); return; }
   const pares = ticketsReporteColegio(f);
   const subsanados = pares.filter(({o})=>o.estado==='Ejecutado'||o.estado==='Cerrado').length;
+  // Sugiere profesional/cargo solo si el usuario no los completó a mano.
+  const campoProf = document.getElementById('rpc-profesional');
+  const campoCargo = document.getElementById('rpc-cargo');
+  if (!campoProf.value.trim()) campoProf.value = sesion.nombre || '';
+  if (!campoCargo.value.trim() && pares.length) campoCargo.value = especialidadSugerida(pares);
   document.getElementById('rpc-resumen').innerHTML = pares.length ? `
     <div class="stat-grid mb-3">
       <div class="stat-box"><div class="stat-num">${pares.length}</div><div class="stat-label">Tickets en el rango</div></div>
@@ -2626,56 +2660,158 @@ function generarReporteColegio() {
 function exportarReporteColegioExcel() {
   if (typeof XLSX === 'undefined') { toast('⚠️ Sin conexión para cargar el motor de Excel','err'); return; }
   const f = filtrosReporteColegio();
+  const pares = ticketsReporteColegio(f);
   const filas = construirFilasReporteColegio(f);
   if (!filas.length) { toast('⚠️ No hay datos para exportar','err'); return; }
+  const e = objEstab(f.idEstab);
+  const profesional = f.profesional || sesion.nombre || 'Profesional responsable';
+  const cargo = f.cargo || especialidadSugerida(pares);
+  const portada = [
+    ['SERVICIO LOCAL DE EDUCACIÓN PÚBLICA PUELCHE'],
+    ['Unidad de Infraestructura y Mantención Escolar'],
+    ['INFORME TÉCNICO DE MANTENCIÓN Y SUBSANACIÓN DE OBSERVACIONES'],
+    [],
+    ['N° de informe', numeroInforme(f.idEstab)],
+    ['Fecha de emisión', new Date().toLocaleDateString('es-CL')],
+    ['Establecimiento', (e?.nombre||nomEstab(f.idEstab)) + (e?.rbd?' — RBD '+e.rbd:'')],
+    ['Comuna', nomComuna(e?.id_comuna)],
+    ['Período informado', (f.desde||'inicio de registros') + ' al ' + (f.hasta||new Date().toISOString().slice(0,10))],
+    ['Alcance', f.incluirPendientes ? 'Observaciones subsanadas y pendientes' : 'Solo observaciones subsanadas'],
+    ['Profesional responsable', profesional],
+    ['Cargo / especialidad', cargo]
+  ];
   const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(portada), 'Portada');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Mantención');
   const nombreArchivo = (nomEstab(f.idEstab)||'colegio').replace(/[^a-z0-9]+/gi,'_');
   XLSX.writeFile(wb, 'mantencion_'+nombreArchivo+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
   toast('✅ Excel descargado','ok');
 }
-// Vista imprimible/adjuntable con fotos de antes/después — pensada para enviar por correo
-// o entregar impresa al establecimiento como respaldo de la mantención realizada.
+// Correlativo simple para el N° de informe: fecha + código del establecimiento.
+function numeroInforme(idEstab) {
+  const e = objEstab(idEstab);
+  const codigo = (e?.rbd || idEstab || 'SLEP').toString().replace(/[^a-zA-Z0-9]/g,'');
+  return 'INF-' + codigo + '-' + new Date().toISOString().slice(0,10).replace(/-/g,'');
+}
+// Informe técnico formal (SLEP Puelche) imprimible/adjuntable, con fotos de antes/después —
+// pensado para enviar por correo o entregar impreso al establecimiento como respaldo firmado
+// de la mantención realizada por el profesional responsable.
 async function exportarReporteColegioPDF() {
   const f = filtrosReporteColegio();
   const pares = ticketsReporteColegio(f);
   if (!pares.length) { toast('⚠️ No hay datos para exportar','err'); return; }
+  const e = objEstab(f.idEstab);
+  const profesional = f.profesional || sesion.nombre || 'Profesional responsable';
+  const cargo = f.cargo || especialidadSugerida(pares);
   const fotos = await Promise.all(pares.map(async ({o,s}) => ({
     antes: await photoURL(o.foto_antes),
     despues: s ? await photoURL(s.foto_despues) : null
   })));
+
+  const subsanados = pares.filter(({o})=>o.estado==='Ejecutado'||o.estado==='Cerrado').length;
+  const pendientes = pares.length - subsanados;
+  const pct = Math.round((subsanados/pares.length)*100);
+  const rango = (f.desde ? fechaCL(f.desde+'T00:00:00') : 'inicio de registros') +
+                ' al ' + (f.hasta ? fechaCL(f.hasta+'T00:00:00') : new Date().toLocaleDateString('es-CL'));
+  const hoy = new Date().toLocaleDateString('es-CL', {day:'2-digit', month:'long', year:'numeric'});
+
+  const conclusion = pendientes === 0
+    ? `De un total de ${pares.length} observación(es) registrada(s) en el período informado, la totalidad (100%) se encuentra subsanada, no existiendo intervenciones pendientes a la fecha de emisión del presente informe.`
+    : `De un total de ${pares.length} observación(es) registrada(s) en el período informado, ${subsanados} se encuentra(n) subsanada(s) (${pct}%), quedando ${pendientes} pendiente(s) de intervención. Se recomienda dar continuidad al seguimiento de las observaciones pendientes conforme a la priorización establecida, a fin de resguardar condiciones adecuadas de seguridad, higiene y funcionamiento de la infraestructura escolar.`;
+
   const w = window.open('', '_blank');
-  const rango = (f.desde||'sin fecha inicial') + ' a ' + (f.hasta||'sin fecha final');
-  w.document.write(`<html><head><title>Reporte de mantención — ${esc(nomEstab(f.idEstab))}</title><style>
-    body{font-family:sans-serif;padding:20px;color:#0f172a}
-    h2{margin-bottom:2px} .sub{color:#64748b;font-size:13px;margin-bottom:20px}
-    .ticket{border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:16px;page-break-inside:avoid}
-    .ticket h3{margin:0 0 4px;font-size:15px} .meta{font-size:12px;color:#64748b;margin-bottom:8px}
-    .row{display:flex;gap:12px;margin-top:8px} .row img{width:48%;border-radius:6px;object-fit:cover;max-height:220px}
-    .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:#f1f5f9;margin-right:6px}
-    .label{font-weight:700;font-size:12px;margin-top:6px}
-    .pend{color:#b45309;font-weight:700;font-size:12px}</style></head><body>
-    <h2>Reporte de mantención — ${esc(nomEstab(f.idEstab))}</h2>
-    <p class="sub">Rango: ${esc(rango)} · ${f.incluirPendientes?'Subsanados y pendientes':'Solo subsanados'} · Generado ${new Date().toLocaleDateString('es-CL')}</p>
+  w.document.write(`<html><head><title>Informe técnico de mantención — ${esc(e?.nombre||'')}</title><style>
+    @page { margin: 2cm 1.8cm; }
+    body{font-family:Georgia,'Times New Roman',serif;color:#111827;padding:0 4px;line-height:1.5}
+    .membrete{border-bottom:3px solid #0f172a;padding-bottom:10px;margin-bottom:18px}
+    .membrete .org{font-family:Arial,sans-serif;font-weight:800;font-size:15px;letter-spacing:.4px}
+    .membrete .uni{font-family:Arial,sans-serif;font-size:11px;color:#475569}
+    h1{font-family:Arial,sans-serif;font-size:17px;text-align:center;margin:18px 0 4px;text-transform:uppercase;letter-spacing:.3px}
+    .folio{font-family:Arial,sans-serif;font-size:11px;color:#475569;text-align:center;margin-bottom:22px}
+    .datos{font-family:Arial,sans-serif;font-size:12px;border:1px solid #cbd5e1;border-radius:6px;padding:12px 16px;margin-bottom:20px}
+    .datos div{padding:2px 0}
+    .datos b{display:inline-block;min-width:150px}
+    h2.sec{font-family:Arial,sans-serif;font-size:13px;text-transform:uppercase;border-bottom:1px solid #cbd5e1;padding-bottom:4px;margin:24px 0 10px}
+    p{font-size:13px;text-align:justify;margin:6px 0}
+    .stat-grid{display:flex;gap:14px;margin:12px 0 18px;font-family:Arial,sans-serif}
+    .stat-box{flex:1;border:1px solid #cbd5e1;border-radius:6px;padding:10px;text-align:center}
+    .stat-box .n{font-size:20px;font-weight:800} .stat-box .l{font-size:10px;color:#475569;text-transform:uppercase}
+    .item{border:1px solid #cbd5e1;border-radius:6px;padding:14px;margin-bottom:14px;page-break-inside:avoid}
+    .item h3{font-family:Arial,sans-serif;font-size:13px;margin:0 0 4px}
+    .meta{font-family:Arial,sans-serif;font-size:11px;color:#475569;margin-bottom:8px}
+    .row{display:flex;gap:12px;margin-top:8px} .row img{width:48%;border-radius:6px;object-fit:cover;max-height:220px;border:1px solid #cbd5e1}
+    .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;background:#f1f5f9;margin-right:6px;font-family:Arial,sans-serif}
+    .label{font-weight:700;font-size:11px;margin-top:8px;font-family:Arial,sans-serif;text-transform:uppercase;color:#334155}
+    .pend{color:#b45309;font-weight:700;font-size:12px;font-family:Arial,sans-serif}
+    .firma{margin-top:60px;font-family:Arial,sans-serif;font-size:12px;text-align:center}
+    .firma .linea{border-top:1px solid #111827;width:280px;margin:0 auto 6px}
+    @media print { .item{break-inside:avoid} }
+    </style></head><body>
+    <div class="membrete">
+      <div class="org">SERVICIO LOCAL DE EDUCACIÓN PÚBLICA PUELCHE</div>
+      <div class="uni">Unidad de Infraestructura y Mantención Escolar</div>
+    </div>
+    <h1>Informe técnico de mantención y subsanación de observaciones</h1>
+    <p class="folio">N° de informe: ${esc(numeroInforme(f.idEstab))} &nbsp;·&nbsp; Fecha de emisión: ${esc(hoy)}</p>
+
+    <div class="datos">
+      <div><b>Establecimiento</b>${esc(e?.nombre||nomEstab(f.idEstab))}${e?.rbd?' — RBD '+esc(e.rbd):''}</div>
+      <div><b>Comuna</b>${esc(nomComuna(e?.id_comuna))}</div>
+      ${e?.direccion?`<div><b>Dirección</b>${esc(e.direccion)}</div>`:''}
+      <div><b>Período informado</b>${esc(rango)}</div>
+      <div><b>Alcance del informe</b>${f.incluirPendientes ? 'Observaciones subsanadas y pendientes' : 'Solo observaciones subsanadas'}</div>
+      <div><b>Profesional responsable</b>${esc(profesional)}</div>
+      <div><b>Cargo / especialidad</b>${esc(cargo)}</div>
+    </div>
+
+    <h2 class="sec">1. Antecedentes</h2>
+    <p>El presente informe da cuenta de las labores de mantención e infraestructura ejecutadas y/o
+    pendientes en el establecimiento <b>${esc(e?.nombre||nomEstab(f.idEstab))}</b>, correspondientes al
+    período comprendido entre el ${esc(rango)}, en el marco del Programa de Mantenimiento de
+    Infraestructura Escolar del Servicio Local de Educación Pública (SLEP) Puelche. Las observaciones
+    fueron levantadas y verificadas en terreno, registrándose su estado, la acción correctiva aplicada
+    cuando corresponde, y el respaldo fotográfico respectivo.</p>
+
+    <h2 class="sec">2. Resumen ejecutivo</h2>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="n">${pares.length}</div><div class="l">Observaciones</div></div>
+      <div class="stat-box"><div class="n">${subsanados}</div><div class="l">Subsanadas</div></div>
+      <div class="stat-box"><div class="n">${pendientes}</div><div class="l">Pendientes</div></div>
+      <div class="stat-box"><div class="n">${pct}%</div><div class="l">Avance</div></div>
+    </div>
+
+    <h2 class="sec">3. Detalle de intervenciones</h2>
     ${pares.map(({o,s},i)=>{
       const subsanado = o.estado==='Ejecutado'||o.estado==='Cerrado';
-      return `<div class="ticket">
-        <h3>${esc(o.ticket||'sin ticket')} — ${esc(nomEspec(o.id_especifico))}${o.cantidad>1?' × '+esc(o.cantidad):''}</h3>
+      return `<div class="item">
+        <h3>N° ${i+1} — ${esc(o.ticket||'sin ticket')} · ${esc(nomGeneral(objEspec(o.id_especifico)?.id_general))} / ${esc(nomEspec(o.id_especifico))}${o.cantidad>1?' × '+esc(o.cantidad):''}</h3>
         <div class="meta">${esc(fechaCL(o.fecha_registro))} · ${esc(nomRecinto(o.id_recinto)||o.nombre_espacio||'—')} ·
-          <span class="chip">${esc(o.prioridad)}</span><span class="chip">${esc(o.estado)}</span></div>
-        <div class="label">Falla reportada</div>
+          <span class="chip">Prioridad ${esc(o.prioridad)}</span><span class="chip">${esc(o.estado)}</span></div>
+        <div class="label">Descripción de la observación</div>
         <p>${esc(o.descripcion||'—')}</p>
         ${subsanado ? `
-          <div class="label">Trabajo ejecutado${s?' — '+esc(fechaCL(s.fecha_ejecucion))+' · '+esc(nomUsuario(s.id_usuario_ejecuta)):''}</div>
+          <div class="label">Intervención ejecutada${s?' — '+esc(fechaCL(s.fecha_ejecucion))+' · '+esc(nomUsuario(s.id_usuario_ejecuta)):''}</div>
           <p>${esc(s?.detalle_trabajo||'—')}</p>
-          ${s?.materiales?.length ? `<p style="font-size:12px;color:#64748b">Materiales: ${esc(s.materiales.map(m=>m.cantidad+' '+uniMat(m.id_material)+' '+nomMat(m.id_material)).join(' · '))}</p>`:''}
-        ` : `<p class="pend">⏳ PENDIENTE DE SUBSANAR</p>`}
+          ${s?.materiales?.length ? `<p style="font-size:11px;color:#475569;font-family:Arial,sans-serif">Materiales utilizados: ${esc(s.materiales.map(m=>m.cantidad+' '+uniMat(m.id_material)+' '+nomMat(m.id_material)).join(' · '))}</p>`:''}
+          <p style="font-size:11px;color:#475569;font-family:Arial,sans-serif">Estado de validación: ${s?.validado?'Validado conforme por Infraestructura':'Pendiente de validación'}</p>
+        ` : `<p class="pend">⏳ INTERVENCIÓN PENDIENTE DE EJECUCIÓN</p>`}
+        <div class="label">Registro fotográfico</div>
         <div class="row">
-          ${fotos[i].antes?`<img src="${fotos[i].antes}">`:''}
-          ${fotos[i].despues?`<img src="${fotos[i].despues}">`:''}
+          ${fotos[i].antes?`<img src="${fotos[i].antes}" alt="Antes">`:''}
+          ${fotos[i].despues?`<img src="${fotos[i].despues}" alt="Después">`:''}
         </div>
       </div>`;
     }).join('')}
+
+    <h2 class="sec">4. Conclusiones y recomendaciones</h2>
+    <p>${conclusion}</p>
+
+    <div class="firma">
+      <div class="linea"></div>
+      <div>${esc(profesional)}</div>
+      <div>${esc(cargo)}</div>
+      <div>Servicio Local de Educación Pública Puelche</div>
+    </div>
     </body></html>`);
   w.document.close(); w.focus(); w.print();
 }
