@@ -15,6 +15,10 @@
      pestaña muestra un aviso en vez de romper el resto de la app (ver iaLibsListas()). -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" defer></script>
+<!-- Seguimiento (Módulo 7): mapa de colegios georreferenciados. Leaflet + tiles de
+     OpenStreetMap (gratis, sin API key). Diferido igual que las libs de Analítica IA. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
 <style>
 
   :root {
@@ -481,6 +485,7 @@
   .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px }
   .kpi-val { font-size:22px; font-weight:800 }
   .kpi-lbl { font-size:10px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.05em }
+  .kpi-delta { font-size:11px; font-weight:700; margin-top:4px }
 
   /* Lightbox de fotos (galería a pantalla completa) */
   #lightbox {
@@ -672,7 +677,10 @@
     <div id="tab-content-subsanacion" style="display:none">
       <div class="search-wrap mb-3"><span class="search-ico">🔎</span>
         <input type="text" id="sub-search" placeholder="Buscar ticket, colegio o falla..." oninput="renderPendientes()"></div>
-      <select id="sub-filter-estab" class="mb-3" onchange="renderPendientes()"><option value="">Todos los establecimientos</option></select>
+      <div class="grid-2 mb-3">
+        <select id="sub-filter-comuna" onchange="poblarSelectColegios('sub-filter-estab', this.value, '', {placeholderTodos:'Todos los establecimientos', soloIds: new Set(obs.map(o=>o.id_establecimiento))}); renderPendientes()"></select>
+        <select id="sub-filter-estab" onchange="renderPendientes()"><option value="">Todos los establecimientos</option></select>
+      </div>
       <div id="pendientes-list"></div>
     </div>
 
@@ -686,6 +694,7 @@
           <option>Ejecutado</option><option>Cerrado</option><option>Reabierto</option><option>Rechazado</option></select>
         <select id="reg-filter-estab" onchange="renderRegistros()"><option value="">Todo establ.</option></select>
       </div>
+      <select id="reg-filter-comuna" class="mb-3" onchange="poblarSelectColegios('reg-filter-estab', this.value, '', {placeholderTodos:'Todo establ.', soloIds: new Set(obs.map(o=>o.id_establecimiento))}); renderRegistros()"></select>
       <div id="registros-list"></div>
     </div>
 
@@ -830,6 +839,7 @@
           <button class="subtab-btn" data-sp="adm-materiales" onclick="showSub('admin','adm-materiales')">Materiales</button>
           <button class="subtab-btn" data-sp="adm-herramientas" onclick="showSub('admin','adm-herramientas')">Herramientas</button>
           <button class="subtab-btn" data-sp="adm-empresas" onclick="showSub('admin','adm-empresas')">Empresas</button>
+          <button class="subtab-btn" data-sp="adm-establecimientos" onclick="showSub('admin','adm-establecimientos')">🏫 Establecimientos</button>
         </div>
         <div class="subpanel on" id="adm-usuarios">
           <button class="btn btn-ghost btn-sm mb-3" onclick="abrirFormUsuario()">+ Nuevo usuario</button>
@@ -847,6 +857,11 @@
           <button class="btn btn-ghost btn-sm mb-3" onclick="abrirFormCatalogo('empresa')">+ Nueva empresa</button>
           <div id="adm-empresas-list"></div>
         </div>
+        <div class="subpanel" id="adm-establecimientos">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Agrega colegios nuevos o edita uno existente para completar su comuna y coordenadas — así aparece en el mapa de Seguimiento.</p>
+          <button class="btn btn-ghost btn-sm mb-3" onclick="abrirFormCatalogo('establecimiento')">+ Nuevo establecimiento</button>
+          <div id="adm-establecimientos-list"></div>
+        </div>
       </div>
 
       <!-- Reportería -->
@@ -857,8 +872,10 @@
             Genera el detalle de mantención de un establecimiento en un rango de fechas —
             trabajos subsanados (con acción, materiales usados y foto de después) y,
             opcionalmente, los que aún están pendientes.</p>
-          <div class="mb-3"><label>Establecimiento</label>
-            <select id="rpc-estab"><option value="">Selecciona un colegio...</option></select></div>
+          <div class="grid-2 mb-3">
+            <div><label>Comuna</label><select id="rpc-comuna" onchange="poblarSelectColegios('rpc-estab', this.value)"></select></div>
+            <div><label>Establecimiento</label><select id="rpc-estab"><option value="">Elige una comuna primero</option></select></div>
+          </div>
           <div class="grid-2 mb-3">
             <div><label>Desde</label><input type="date" id="rpc-desde"></div>
             <div><label>Hasta</label><input type="date" id="rpc-hasta"></div>
@@ -937,14 +954,17 @@
       <!-- Asignaciones (Módulo 7 · Coordinación): qué colegio(s) atiende cada Maestro/Director -->
       <div class="subpanel" id="ges-asignaciones">
         <div class="card mb-3">
-          <div class="card-title mb-3">🧭 Asignar colegios a Maestros / Directores</div>
+          <div class="card-title mb-3">🧭 Asignar colegios al personal</div>
           <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
-            Define qué establecimiento(s) debe atender cada usuario de terreno. Con al menos
-            una asignación activa, esa persona solo ve y puede subsanar los tickets de sus
-            colegios asignados; sin asignaciones, mantiene visibilidad de toda la red.</p>
+            Define qué establecimiento(s) debe atender cada Maestro, Director o personal de
+            Infraestructura. Con al menos una asignación activa, un Maestro solo ve y puede
+            subsanar los tickets de sus colegios asignados; a Infraestructura la asignación
+            solo le queda como registro de cobertura, sin acotar su acceso (sigue viendo
+            toda la red). Sin asignaciones, cualquiera mantiene visibilidad de toda la red.</p>
+          <div class="mb-3"><label>Usuario</label><select id="asig-usuario"></select></div>
           <div class="grid-2 mb-3">
-            <div><label>Usuario</label><select id="asig-usuario"></select></div>
-            <div><label>Establecimiento</label><select id="asig-estab"></select></div>
+            <div><label>Comuna</label><select id="asig-comuna" onchange="poblarSelectColegios('asig-estab', this.value)"></select></div>
+            <div><label>Establecimiento</label><select id="asig-estab"><option value="">Elige una comuna primero</option></select></div>
           </div>
           <button class="btn btn-primary" onclick="guardarAsignacion()">➕ Asignar</button>
         </div>
@@ -964,13 +984,27 @@
           establecimiento, con desglose por recinto (ej. cuánto se ha gastado y cuántas
           tareas se han resuelto en los baños de un colegio en particular).</p>
         <div class="grid-2 mb-3">
-          <div><label>Establecimiento</label>
-            <select id="seg-estab" onchange="cambiarEstabSeguimiento()"><option value="">Toda la red</option></select></div>
-          <div><label>Recinto</label>
-            <select id="seg-recinto" onchange="pintarSeguimiento()"><option value="">Todos</option></select></div>
+          <div><label>Comuna</label><select id="seg-comuna" onchange="cambiarComunaSeguimiento()"><option value="">Toda la red</option></select></div>
+          <div><label>Establecimiento</label><select id="seg-estab" onchange="cambiarEstabSeguimiento()"><option value="">Todos</option></select></div>
+        </div>
+        <div class="grid-2 mb-3">
+          <div><label>Recinto</label><select id="seg-recinto" onchange="pintarSeguimiento()"><option value="">Todos</option></select></div>
+          <div></div>
+        </div>
+        <div class="grid-2">
+          <div><label>Desde</label><input type="date" id="seg-desde" onchange="pintarSeguimiento()"></div>
+          <div><label>Hasta</label><input type="date" id="seg-hasta" onchange="pintarSeguimiento()"></div>
         </div>
       </div>
       <div class="kpi-grid mb-3" id="seg-kpis"></div>
+      <div class="card mb-3">
+        <div class="card-title mb-3">🗺️ Mapa de establecimientos</div>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:8px">El color del pin indica tickets pendientes: verde = al día, ámbar = algunos pendientes, rojo = varios pendientes. Toca un pin para ver el detalle.</p>
+        <div id="seg-map" style="height:320px;border-radius:10px;overflow:hidden"></div>
+        <p id="seg-map-empty" style="font-size:12px;color:var(--muted);margin-top:8px;display:none">
+          Ningún establecimiento tiene coordenadas cargadas todavía. Agrégalas en
+          <b>Gestión → Administración → 🏫 Establecimientos</b> (editar ✏️ → Latitud/Longitud) para que aparezcan aquí.</p>
+      </div>
       <div class="card mb-3">
         <div class="card-title">Tareas pendientes vs. resueltas</div>
         <canvas id="seg-chart-tareas" height="200"></canvas>
@@ -1004,6 +1038,8 @@
   <div id="modal-catalogo-content"></div></div></div>
 <div class="modal-overlay" id="modal-oc"><div class="modal"><div class="modal-handle"></div>
   <div id="modal-oc-content"></div></div></div>
+<div class="modal-overlay" id="modal-seg-colegio"><div class="modal"><div class="modal-handle"></div>
+  <div id="modal-seg-colegio-content"></div></div></div>
 
 <!-- Lightbox: ver cualquier foto a pantalla completa -->
 <div id="lightbox" onclick="if(event.target.id==='lightbox')cerrarLightbox()">
@@ -1220,6 +1256,33 @@ const nomRecinto= id => { const r=(cat?.recintos||[]).find(x=>x.id_recinto==id);
 const objEspec  = id => (cat?.especificos||[]).find(e=>e.id_especifico==id);
 const nomEspec  = id => objEspec(id)?.nombre || '';
 const nomGeneral= id => (cat?.generales||[]).find(g=>g.id_general==id)?.nombre || '';
+
+// Selector en cascada Comuna -> Colegio, reutilizado en todos los formularios/filtros que
+// eligen un establecimiento (Emergencia, Reporte por colegio, Seguimiento, Asignaciones,
+// filtros de Tickets/Subsanar). El <select> de comuna llama a poblarSelectColegios() en su
+// onchange para refiltrar el <select> de colegio correspondiente.
+function poblarSelectComunas(selId, valorActual) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const cur = valorActual !== undefined ? valorActual : sel.value;
+  sel.innerHTML = '<option value="">Comuna...</option>' +
+    (cat?.comunas||[]).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre))
+      .map(c=>`<option value="${esc(c.id_comuna)}">${esc(c.nombre)}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+function poblarSelectColegios(colSelId, idComuna, valorActual, opciones) {
+  const sel = document.getElementById(colSelId);
+  if (!sel) return;
+  const soloUsados = opciones && opciones.soloIds; // ej: reg-filter-estab solo debe listar colegios con tickets
+  let lista = idComuna ? (cat?.establecimientos||[]).filter(e=>e.id_comuna===idComuna) : [];
+  if (soloUsados) lista = lista.filter(e=>soloUsados.has(e.id_establecimiento));
+  const placeholderVacio = (opciones && opciones.placeholderTodos) || 'Todos';
+  const placeholder = idComuna ? placeholderVacio : 'Elige una comuna primero';
+  sel.innerHTML = `<option value="">${esc(placeholder)}</option>` +
+    lista.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre))
+      .map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(e.nombre)}</option>`).join('');
+  if (valorActual) sel.value = valorActual;
+}
 // El catálogo de materiales puede venir de 'catalogos' (cat.materiales) o de 'bodega_pull'
 // (inv.materiales, que además trae stock/mínimo); se busca en ambos para que cualquiera
 // de los dos orígenes resuelva el nombre y la unidad correctamente.
@@ -1513,17 +1576,16 @@ const TIPOS_EMERGENCIA = [
 
 function abrirEmergencia() {
   currentFotos.emg = [];
-  const estabs = (cat?.establecimientos||[]);
   const fijo = sesion.perfil === 'Director' && sesion.id_establecimiento;
   document.getElementById('modal-emg-content').innerHTML = `
     <h3 style="font-size:17px;font-weight:800;color:var(--danger);margin-bottom:4px">🚨 Trabajo de emergencia</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Se genera un ticket con prioridad ALTA automática.</p>
 
     ${fijo ? `<div class="card" style="padding:10px;margin-bottom:12px">${esc(nomEstab(sesion.id_establecimiento))}</div>`
-           : `<div class="mb-3"><label>Establecimiento</label>
-                <select id="emg-estab"><option value="">Selecciona...</option>
-                ${estabs.map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('')}
-                </select></div>`}
+           : `<div class="grid-2 mb-3">
+                <div><label>Comuna</label><select id="emg-comuna" onchange="poblarSelectColegios('emg-estab', this.value)"></select></div>
+                <div><label>Establecimiento</label><select id="emg-estab"><option value="">Elige una comuna primero</option></select></div>
+              </div>`}
 
     <label>Tipo de emergencia</label>
     <div class="opt-list mb-3" id="emg-tipos">
@@ -1546,6 +1608,7 @@ function abrirEmergencia() {
     <button class="btn btn-danger" onclick="guardarEmergencia()">🚨 Generar ticket de emergencia</button>
     <button class="btn btn-ghost mt-3" onclick="closeModal('modal-emergencia')">Cancelar</button>`;
   pintarFotosGrid('emg');
+  if (!fijo) poblarSelectComunas('emg-comuna');
   openModal('modal-emergencia');
 }
 function elegirEmg(el) {
@@ -2102,7 +2165,7 @@ function showSub(grupo, id) {
   const map = {
     bodega: ['bod-inventario','bod-entregar','bod-custodia','bod-recepcion'],
     gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-reportes','ges-analitica','ges-asignaciones'],
-    admin: ['adm-usuarios','adm-materiales','adm-herramientas','adm-empresas']
+    admin: ['adm-usuarios','adm-materiales','adm-herramientas','adm-empresas','adm-establecimientos']
   }[grupo];
   const barId = grupo==='admin' ? 'admin-subtabs' : grupo+'-subtabs';
   map.forEach(x=>{
@@ -2115,6 +2178,7 @@ function showSub(grupo, id) {
     'ges-bandeja': pintarBandejaGestion, 'ges-validacion': pintarValidacionCierres, 'ges-oc': pintarOCList,
     'adm-usuarios': pintarAdminUsuarios, 'adm-materiales': ()=>pintarAdminCatalogo('material'),
     'adm-herramientas': ()=>pintarAdminCatalogo('herramienta'), 'adm-empresas': ()=>pintarAdminCatalogo('empresa'),
+    'adm-establecimientos': ()=>pintarAdminCatalogo('establecimiento'),
     'ges-reportes': pintarResumenReporte,
     'ges-asignaciones': pintarAsignaciones
   };
@@ -2663,45 +2727,76 @@ async function guardarUsuario() {
 }
 
 const CATALOGO_CFG = {
-  material:    {campo:'materiales',    id:'id_material',    campos:[['nombre','Nombre'],['unidad','Unidad'],['minimo','Stock mínimo'],['stock','Stock inicial']]},
-  herramienta: {campo:'herramientas',  id:'id_herramienta', campos:[['nombre','Nombre'],['codigo','Código / serie']]},
-  empresa:     {campo:'empresas',      id:'id_empresa',     campos:[['nombre','Razón social'],['rut','RUT']]}
+  material:    {lista:'materiales',        id:'id_material',        campos:[['nombre','Nombre'],['unidad','Unidad'],['minimo','Stock mínimo'],['stock','Stock inicial']]},
+  herramienta: {lista:'herramientas',      id:'id_herramienta',     campos:[['nombre','Nombre'],['codigo','Código / serie']]},
+  empresa:     {lista:'empresas',          id:'id_empresa',         campos:[['nombre','Razón social'],['rut','RUT']]},
+  establecimiento: {lista:'establecimientos', id:'id_establecimiento', campos:[
+    ['nombre','Nombre'], ['id_comuna','Comuna','select-comuna'], ['rbd','RBD'],
+    ['tipo','Tipo (Colegio/Liceo/Jardín...)'], ['direccion','Dirección'],
+    ['lat','Latitud (ej: -37.6521)'], ['lng','Longitud (ej: -71.7284)']
+  ]}
 };
+// Devuelve la MISMA referencia guardada en inv/cat (creándola si falta), para que
+// empujar/editar un ítem y luego guardar(LS.*, ...) persista de verdad el cambio.
+function listaCatalogo(tipo) {
+  if (tipo==='material') return inv.materiales = inv.materiales||[];
+  if (tipo==='herramienta') return inv.herramientas = inv.herramientas||[];
+  if (tipo==='empresa') return cat.empresas = cat.empresas||[];
+  return cat.establecimientos = cat.establecimientos||[];
+}
 function pintarAdminCatalogo(tipo) {
   const cfg = CATALOGO_CFG[tipo];
-  const origen = tipo==='material' ? (inv.materiales||[]) : tipo==='herramienta' ? (inv.herramientas||[]) : (cat?.empresas||[]);
-  const el = document.getElementById('adm-'+ (tipo==='material'?'materiales':tipo==='herramienta'?'herramientas':'empresas') +'-list');
+  const origen = listaCatalogo(tipo);
+  const el = document.getElementById('adm-'+cfg.lista+'-list');
   el.innerHTML = origen.length ? origen.map(x=>`
     <div class="record-item" style="cursor:default"><div class="record-header"><div style="flex:1">
       <div class="record-name">${esc(x.nombre)}</div>
-      <div class="record-meta">${cfg.campos.slice(1).map(c=>x[c[0]]!=null?c[1]+': '+esc(x[c[0]]):'').filter(Boolean).join(' · ')}</div>
-    </div></div></div>`).join('') : '<p style="color:var(--muted);padding:12px">Sin registros.</p>';
+      <div class="record-meta">${tipo==='establecimiento'
+        ? [nomComuna(x.id_comuna), x.rbd?'RBD '+esc(x.rbd):'', (x.lat&&x.lng)?'📍 con coordenadas':'⚠️ sin coordenadas'].filter(Boolean).join(' · ')
+        : cfg.campos.slice(1).map(c=>(x[c[0]]!=null&&x[c[0]]!=='')?c[1]+': '+esc(x[c[0]]):'').filter(Boolean).join(' · ')}</div>
+    </div>
+    <button class="btn-icon" onclick='abrirFormCatalogo("${tipo}", ${JSON.stringify(x).replace(/'/g,"&apos;")})'>✏️</button>
+    </div></div>`).join('') : '<p style="color:var(--muted);padding:12px">Sin registros.</p>';
 }
-function abrirFormCatalogo(tipo) {
+function abrirFormCatalogo(tipo, item) {
+  item = item || {};
   const cfg = CATALOGO_CFG[tipo];
   document.getElementById('modal-catalogo-content').innerHTML = `
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">Nuevo(a) ${esc(tipo)}</h3>
-    ${cfg.campos.map(([k,lbl])=>`<div class="mb-3"><label>${esc(lbl)}</label><input type="text" id="ct-${k}"></div>`).join('')}
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">${item[cfg.id]?'Editar':'Nuevo(a)'} ${esc(tipo)}</h3>
+    <input type="hidden" id="ct-id" value="${esc(item[cfg.id]||'')}">
+    ${cfg.campos.map(([k,lbl,tipoCampo])=> tipoCampo==='select-comuna' ? `
+      <div class="mb-3"><label>${esc(lbl)}</label>
+        <select id="ct-${k}"><option value="">Selecciona...</option>
+        ${(cat?.comunas||[]).map(c=>`<option value="${esc(c.id_comuna)}" ${item[k]==c.id_comuna?'selected':''}>${esc(c.nombre)}</option>`).join('')}
+        </select></div>` :
+      `<div class="mb-3"><label>${esc(lbl)}</label><input type="text" id="ct-${k}" value="${esc(item[k]||'')}"></div>`
+    ).join('')}
     <button class="btn btn-primary" onclick="guardarCatalogo('${tipo}')">💾 Guardar</button>
     <button class="btn btn-ghost mt-3" onclick="closeModal('modal-catalogo')">Cancelar</button>`;
   openModal('modal-catalogo');
 }
 async function guardarCatalogo(tipo) {
   const cfg = CATALOGO_CFG[tipo];
-  const item = { [cfg.id]: uid(tipo.slice(0,3).toUpperCase()), id_local: uid('ADM'), tipo_catalogo:tipo,
+  const idExistente = document.getElementById('ct-id').value;
+  const idFinal = idExistente || uid(tipo.slice(0,3).toUpperCase());
+  const item = { [cfg.id]: idFinal, id_local: uid('ADM'), tipo_catalogo:tipo,
     id_usuario_actor: sesion.id_usuario, synced:false };
   let ok1 = true;
   cfg.campos.forEach(([k])=>{ const v = document.getElementById('ct-'+k).value.trim(); if(!v && k==='nombre') ok1=false; item[k]=v; });
   if (!ok1) { toast('⚠️ El nombre es obligatorio','err'); return; }
-  if (tipo==='material') { item.stock = +item.stock||0; item.minimo = +item.minimo||0; inv.materiales.push(item); guardar(LS.inv, inv); }
-  else if (tipo==='herramienta') { inv.herramientas.push(item); guardar(LS.inv, inv); }
-  else { cat.empresas = cat.empresas||[]; cat.empresas.push(item); guardar(LS.cat, cat); }
+  if (tipo==='material') item.stock = +item.stock||0, item.minimo = +item.minimo||0;
+
+  const arr = listaCatalogo(tipo);
+  const i = arr.findIndex(x=>x[cfg.id]===idFinal);
+  if (i>=0) arr[i] = Object.assign({}, arr[i], item); else arr.push(item);
+  if (tipo==='material'||tipo==='herramienta') guardar(LS.inv, inv); else guardar(LS.cat, cat);
   adminCola.push(item); guardar(LS.admincola, adminCola);
   encolar('admin_catalogo', item.id_local);
   closeModal('modal-catalogo');
   const ok = await enviarUno('admin_catalogo', item.id_local);
   toast(ok ? '✅ Guardado' : '💾 Guardado, se enviará solo', 'ok');
   pintarAdminCatalogo(tipo); if(tipo==='material') poblarRecepcionSelect();
+  if (tipo==='establecimiento') refrescarTodo();  // repuebla selectores de colegio (reportes, seguimiento, asignaciones)
 }
 
 // ==================== REPORTE DE MANTENCIÓN POR COLEGIO ====================
@@ -3225,14 +3320,12 @@ function usuariosAsignables() { return cat?.usuarios_asignables || []; }
 
 function pintarAsignaciones() {
   const selU = document.getElementById('asig-usuario');
-  const selE = document.getElementById('asig-estab');
   const usuarios = usuariosAsignables();
   selU.innerHTML = usuarios.length
     ? usuarios.map(u=>`<option value="${esc(u.id_usuario)}">${esc(u.nombre)} · ${esc(u.perfil)}</option>`).join('')
-    : '<option value="">Sin usuarios Maestro/Director en el catálogo</option>';
-  selE.innerHTML = (cat?.establecimientos||[]).slice()
-    .sort((a,b)=>(nomComuna(a.id_comuna)+a.nombre).localeCompare(nomComuna(b.id_comuna)+b.nombre))
-    .map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('');
+    : '<option value="">Sin usuarios asignables en el catálogo</option>';
+  poblarSelectComunas('asig-comuna');
+  poblarSelectColegios('asig-estab', document.getElementById('asig-comuna').value);
 
   const activas = asignaciones.filter(a=>String(a.activa)!=='false');
   const porUsuario = {};
@@ -3287,6 +3380,23 @@ async function quitarAsignacion(idLocal) {
 function costoSubsanacion(s) {
   return (s.materiales||[]).reduce((tot,m)=>tot + (+m.cantidad||0) * (+objMat(m.id_material)?.costo_referencial||0), 0);
 }
+// A diferencia de los demás selectores (que exigen elegir comuna antes que colegio), en
+// Seguimiento la comuna es un filtro opcional: sin comuna elegida, el colegio lista TODA
+// la red (coherente con que la vista por defecto sea "toda la red agregada").
+function pintarSegEstabSelect() {
+  const idComuna = document.getElementById('seg-comuna').value;
+  const selE = document.getElementById('seg-estab');
+  const cur = selE.value;
+  const lista = (idComuna ? (cat?.establecimientos||[]).filter(e=>e.id_comuna===idComuna) : (cat?.establecimientos||[]))
+    .slice().sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  selE.innerHTML = '<option value="">Todos</option>' +
+    lista.map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(e.nombre)}</option>`).join('');
+  if (cur && lista.some(e=>e.id_establecimiento===cur)) selE.value = cur; else selE.value = '';
+}
+function cambiarComunaSeguimiento() {
+  pintarSegEstabSelect();
+  cambiarEstabSeguimiento();
+}
 function cambiarEstabSeguimiento() {
   const idEstab = document.getElementById('seg-estab').value;
   const selR = document.getElementById('seg-recinto');
@@ -3296,19 +3406,55 @@ function cambiarEstabSeguimiento() {
   selR.value = '';
   pintarSeguimiento();
 }
-function pintarSeguimiento() {
-  const selEstab = document.getElementById('seg-estab');
-  if (!selEstab.options.length || selEstab.options.length === 1) {
-    selEstab.innerHTML = '<option value="">Toda la red</option>' + (cat?.establecimientos||[]).slice()
-      .sort((a,b)=>(nomComuna(a.id_comuna)+a.nombre).localeCompare(nomComuna(b.id_comuna)+b.nombre))
-      .map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('');
-  }
-  const idEstab  = selEstab.value;
+// Filtra observaciones por comuna/estab/recinto/rango de fechas, según los <select>/<input>
+// actuales de Seguimiento. dDesde/dHasta quedan null si el campo está vacío (sin acotar).
+function filtrosSeguimientoActuales() {
+  const idComuna = document.getElementById('seg-comuna').value;
+  const idEstab  = document.getElementById('seg-estab').value;
   const idRecinto = document.getElementById('seg-recinto').value;
+  const desde = document.getElementById('seg-desde').value;
+  const hasta = document.getElementById('seg-hasta').value;
+  return {idComuna, idEstab, idRecinto,
+    dDesde: desde ? new Date(desde+'T00:00:00') : null,
+    dHasta: hasta ? new Date(hasta+'T23:59:59') : null};
+}
+function filtrarObsSeguimiento(f, lista) {
+  let r = lista || obs;
+  if (f.idComuna) r = r.filter(o=>objEstab(o.id_establecimiento)?.id_comuna===f.idComuna);
+  if (f.idEstab)  r = r.filter(o=>o.id_establecimiento===f.idEstab);
+  if (f.idRecinto) r = r.filter(o=>o.id_recinto===f.idRecinto);
+  if (f.dDesde || f.dHasta) r = r.filter(o=>{
+    const fr = new Date(o.fecha_registro);
+    return (!f.dDesde || fr>=f.dDesde) && (!f.dHasta || fr<=f.dHasta);
+  });
+  return r;
+}
+function deltaHTML(actual, anterior) {
+  if (!anterior) return '';
+  const pct = Math.round(((actual-anterior)/anterior)*100);
+  if (pct === 0) return `<div class="kpi-delta" style="color:var(--muted)">= vs. período anterior</div>`;
+  const color = pct>0 ? 'var(--ok)' : 'var(--danger)';
+  return `<div class="kpi-delta" style="color:${color}">${pct>0?'▲':'▼'} ${Math.abs(pct)}% vs. período anterior</div>`;
+}
+let segFiltrosInicializados = false;
+function pintarSeguimiento() {
+  if (!segFiltrosInicializados) {
+    segFiltrosInicializados = true;
+    poblarSelectComunas('seg-comuna');
+    pintarSegEstabSelect();
+  }
 
-  let lista = obs;
-  if (idEstab)   lista = lista.filter(o=>o.id_establecimiento===idEstab);
-  if (idRecinto) lista = lista.filter(o=>o.id_recinto===idRecinto);
+  const f = filtrosSeguimientoActuales();
+  const lista = filtrarObsSeguimiento(f);
+
+  // Período anterior (misma duración, inmediatamente antes) para las flechas de tendencia —
+  // si no hay rango de fechas elegido, no hay con qué comparar y se omiten los deltas.
+  let listaAnterior = [];
+  if (f.dDesde && f.dHasta) {
+    const dur = f.dHasta - f.dDesde;
+    const fAnterior = Object.assign({}, f, {dDesde: new Date(f.dDesde-dur), dHasta: new Date(f.dDesde-1)});
+    listaAnterior = filtrarObsSeguimiento(fAnterior);
+  }
 
   const conSub = lista.map(o => ({o, s: subs.filter(x=>x.id_local_obs===o.id_local).slice(-1)[0]}));
   const resueltas   = conSub.filter(({o})=>o.estado==='Ejecutado'||o.estado==='Cerrado').length;
@@ -3318,19 +3464,23 @@ function pintarSeguimiento() {
   const diasResp = conSub.filter(({s})=>s).map(({o,s})=>Math.max(0,(new Date(s.fecha_ejecucion)-new Date(o.fecha_registro))/86400000));
   const diasProm = diasResp.length ? Math.round(diasResp.reduce((a,b)=>a+b,0)/diasResp.length) : 0;
 
+  const conSubAnt = listaAnterior.map(o => ({o, s: subs.filter(x=>x.id_local_obs===o.id_local).slice(-1)[0]}));
+  const resueltasAnt = conSubAnt.filter(({o})=>o.estado==='Ejecutado'||o.estado==='Cerrado').length;
+  const costoAnt = conSubAnt.reduce((t,{s})=>t + (s?costoSubsanacion(s):0), 0);
+
   document.getElementById('seg-kpis').innerHTML = `
-    <div class="kpi-card"><div class="kpi-val">${lista.length}</div><div class="kpi-lbl">Tareas totales</div></div>
-    <div class="kpi-card"><div class="kpi-val">${resueltas}</div><div class="kpi-lbl">Resueltas</div></div>
+    <div class="kpi-card"><div class="kpi-val">${lista.length}</div><div class="kpi-lbl">Tareas totales</div>${deltaHTML(lista.length, listaAnterior.length)}</div>
+    <div class="kpi-card"><div class="kpi-val">${resueltas}</div><div class="kpi-lbl">Resueltas</div>${deltaHTML(resueltas, resueltasAnt)}</div>
     <div class="kpi-card"><div class="kpi-val">${pendientes}</div><div class="kpi-lbl">Pendientes</div></div>
     <div class="kpi-card"><div class="kpi-val">${horasTotal.toFixed(1)}</div><div class="kpi-lbl">Horas hombre</div></div>
-    <div class="kpi-card"><div class="kpi-val">$${costoTotal.toLocaleString('es-CL')}</div><div class="kpi-lbl">Costo materiales</div></div>
+    <div class="kpi-card"><div class="kpi-val">$${costoTotal.toLocaleString('es-CL')}</div><div class="kpi-lbl">Costo materiales</div>${deltaHTML(costoTotal, costoAnt)}</div>
     <div class="kpi-card"><div class="kpi-val">${diasProm}</div><div class="kpi-lbl">Días prom. respuesta</div></div>`;
 
   // Agrupa por establecimiento (si hay uno elegido, el "grupo" pasa a ser cada recinto suyo,
   // para el drill-down que pide filtrar p.ej. por los baños de un colegio en particular).
   const porGrupo = {};
   conSub.forEach(({o,s})=>{
-    const clave = idEstab ? (nomRecinto(o.id_recinto)||o.nombre_espacio||'Sin recinto') : nomEstab(o.id_establecimiento);
+    const clave = f.idEstab ? (nomRecinto(o.id_recinto)||o.nombre_espacio||'Sin recinto') : nomEstab(o.id_establecimiento);
     if (!porGrupo[clave]) porGrupo[clave] = {resueltas:0, pendientes:0, costo:0, horas:0};
     const g = porGrupo[clave];
     if (o.estado==='Ejecutado'||o.estado==='Cerrado') g.resueltas++; else g.pendientes++;
@@ -3353,7 +3503,7 @@ function pintarSeguimiento() {
   document.getElementById('seg-tabla').innerHTML = grupos.length ? `
     <table class="mono" style="width:100%;font-size:12px;border-collapse:collapse">
       <thead><tr style="text-align:left;border-bottom:1px solid var(--border)">
-        <th style="padding:6px 8px">${idEstab?'Recinto':'Establecimiento'}</th>
+        <th style="padding:6px 8px">${f.idEstab?'Recinto':'Establecimiento'}</th>
         <th style="padding:6px 8px">Resueltas</th><th style="padding:6px 8px">Pendientes</th>
         <th style="padding:6px 8px">Horas</th><th style="padding:6px 8px">Costo</th></tr></thead>
       <tbody>${grupos.map(([nombre,g])=>`<tr style="border-bottom:1px solid var(--border)">
@@ -3361,6 +3511,72 @@ function pintarSeguimiento() {
         <td style="padding:6px 8px">${g.pendientes}</td><td style="padding:6px 8px">${g.horas.toFixed(1)}</td>
         <td style="padding:6px 8px">$${g.costo.toLocaleString('es-CL')}</td></tr>`).join('')}</tbody>
     </table>` : '<p style="color:var(--muted);font-size:12px">Sin datos para este filtro.</p>';
+
+  pintarSegMapa(f);
+}
+
+// ---- Mapa de establecimientos georreferenciados (Leaflet + OpenStreetMap) ----
+let segMapInstance = null;
+let segMapMarkers = [];
+function pintarSegMapa(f) {
+  const cont = document.getElementById('seg-map');
+  const vacio = document.getElementById('seg-map-empty');
+  if (!cont) return;
+  if (typeof L === 'undefined') { vacio.textContent = 'Sin conexión: no se pudo cargar el mapa.'; vacio.style.display='block'; cont.style.display='none'; return; }
+
+  let estabs = (cat?.establecimientos||[]).filter(e=>e.lat && e.lng);
+  if (f.idComuna) estabs = estabs.filter(e=>e.id_comuna===f.idComuna);
+  if (!estabs.length) { cont.style.display='none'; vacio.style.display='block'; return; }
+  cont.style.display='block'; vacio.style.display='none';
+
+  const pendientesPorEstab = {};
+  obs.forEach(o=>{
+    if (o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Reabierto') {
+      pendientesPorEstab[o.id_establecimiento] = (pendientesPorEstab[o.id_establecimiento]||0)+1;
+    }
+  });
+
+  if (!segMapInstance) {
+    segMapInstance = L.map('seg-map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 18
+    }).addTo(segMapInstance);
+  }
+  segMapMarkers.forEach(m=>segMapInstance.removeLayer(m));
+  segMapMarkers = [];
+
+  const bounds = [];
+  estabs.forEach(e=>{
+    const n = pendientesPorEstab[e.id_establecimiento] || 0;
+    const color = n>=4 ? '#ef4444' : n>=1 ? '#f59e0b' : '#22c55e';
+    const marker = L.circleMarker([+e.lat, +e.lng], {radius:9, fillColor:color, color:'#fff', weight:2, fillOpacity:0.9})
+      .addTo(segMapInstance);
+    marker.bindTooltip(`${e.nombre} (${n} pendiente${n===1?'':'s'})`, {direction:'top'});
+    marker.on('click', ()=>abrirVentanaPendientesColegio(e.id_establecimiento));
+    segMapMarkers.push(marker);
+    bounds.push([+e.lat, +e.lng]);
+  });
+  if (bounds.length === 1) segMapInstance.setView(bounds[0], 13);
+  else segMapInstance.fitBounds(bounds, {padding:[30,30]});
+  setTimeout(()=>segMapInstance && segMapInstance.invalidateSize(), 150);
+}
+// "Ventana de informes de pendientes": lista los tickets pendientes de un colegio al tocar su pin.
+function abrirVentanaPendientesColegio(idEstab) {
+  const e = objEstab(idEstab);
+  const pendientesEstab = obs.filter(o=>o.id_establecimiento===idEstab &&
+    (o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Reabierto'));
+  const peso = {'Alta':0,'Media':1,'Por evaluar':2,'Baja':3};
+  pendientesEstab.sort((a,b)=>(peso[a.prioridad]??9)-(peso[b.prioridad]??9));
+  document.getElementById('modal-seg-colegio-content').innerHTML = `
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">${esc(e?.nombre||idEstab)}</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">${esc(nomComuna(e?.id_comuna))} · ${pendientesEstab.length} ticket(s) pendiente(s)</p>
+    ${pendientesEstab.length ? pendientesEstab.map(o=>`
+      <div class="record-item" onclick="closeModal('modal-seg-colegio'); openDetalleModal('${esc(o.id_local)}')">
+        <div class="record-name">${esc(o.ticket||'sin ticket')} — ${esc(nomEspec(o.id_especifico)||o.tipo_emergencia||'Emergencia')}</div>
+        <div class="record-meta">${esc(fechaCL(o.fecha_registro))} · ${chipPri(o.prioridad)}<span class="chip">${esc(o.estado)}</span></div>
+      </div>`).join('') : '<p style="color:var(--muted);font-size:13px">Sin pendientes — este colegio está al día. ✅</p>'}
+    <button class="btn btn-ghost mt-3" onclick="closeModal('modal-seg-colegio')">Cerrar</button>`;
+  openModal('modal-seg-colegio');
 }
 function dibujarSegChart(canvasId, tipo, labels, datasets, opts) {
   const el = document.getElementById(canvasId);
@@ -3387,27 +3603,24 @@ function refrescarTodo() {
   document.getElementById('resumen-prioridad').innerHTML =
     ['Alta','Media','Baja','Por evaluar'].map(p=>`${chipPri(p)} ${cuenta(p)}`).join('&nbsp;&nbsp;');
 
-  // Filtros de establecimiento
-  const usados = [...new Set(obs.map(o=>o.id_establecimiento))];
-  ['sub-filter-estab','reg-filter-estab'].forEach(id=>{
-    const sel = document.getElementById(id); if(!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">Todos los establecimientos</option>' +
-      usados.map(e=>`<option value="${esc(e)}">${esc(nomEstab(e))}</option>`).join('');
-    sel.value = cur;
+  // Filtros de establecimiento (Tickets / Subsanar): comuna -> colegio, acotado a los
+  // establecimientos que de verdad tienen algún ticket registrado.
+  const usadosSet = new Set(obs.map(o=>o.id_establecimiento));
+  [['sub-filter-comuna','sub-filter-estab'], ['reg-filter-comuna','reg-filter-estab']].forEach(([idComunaSel, idColSel])=>{
+    if (!document.getElementById(idComunaSel)) return;
+    poblarSelectComunas(idComunaSel);
+    const comunaVal = document.getElementById(idComunaSel).value;
+    poblarSelectColegios(idColSel, comunaVal, document.getElementById(idColSel).value,
+      {placeholderTodos:'Todos los establecimientos', soloIds: usadosSet});
   });
 
-  // Selector del reporte por colegio: se listan TODOS los establecimientos del catálogo
-  // (no solo los que ya tienen tickets), ordenados por comuna, para poder generar un
-  // reporte de cualquier colegio de la red.
-  const rpcSel = document.getElementById('rpc-estab');
-  if (rpcSel) {
-    const cur = rpcSel.value;
-    const estabs = (cat?.establecimientos||[]).slice()
-      .sort((a,b)=>(nomComuna(a.id_comuna)+a.nombre).localeCompare(nomComuna(b.id_comuna)+b.nombre));
-    rpcSel.innerHTML = '<option value="">Selecciona un colegio...</option>' +
-      estabs.map(e=>`<option value="${esc(e.id_establecimiento)}">${esc(nomComuna(e.id_comuna))} — ${esc(e.nombre)}</option>`).join('');
-    rpcSel.value = cur;
+  // Reporte por colegio: comuna -> colegio con TODOS los establecimientos del catálogo
+  // (no solo los que ya tienen tickets), para poder generar un reporte de cualquiera.
+  if (document.getElementById('rpc-comuna')) {
+    poblarSelectComunas('rpc-comuna');
+    const comunaVal = document.getElementById('rpc-comuna').value;
+    poblarSelectColegios('rpc-estab', comunaVal, document.getElementById('rpc-estab').value,
+      {placeholderTodos:'Selecciona un colegio...'});
   }
 
   pintarCola(); renderPendientes(); renderRegistros();
