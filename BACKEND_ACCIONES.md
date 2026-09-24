@@ -200,13 +200,16 @@ Alta o edición de un usuario (login). Exclusivo de Infraestructura — el backe
 ```json
 {"action":"admin_usuario", "data":{
   "id_local":"ADM_xxx", "id_usuario":"USR_9", "nombre":"Juan Pérez",
-  "usuario_login":"jperez", "clave":"******", "perfil":"Maestro",
-  "id_establecimiento":"", "es_edicion":false, "id_usuario_actor":"USR_1"
+  "usuario_login":"jperez", "correo":"jperez@sleppuelche.gob.cl", "clave":"******",
+  "perfil":"Maestro", "id_establecimiento":"", "es_edicion":false, "id_usuario_actor":"USR_1"
 }}
 ```
 `clave` viaja vacía cuando es una edición sin cambio de contraseña — el backend NO debe
 sobrescribir la clave existente en ese caso. `perfil` ∈ `Director | Maestro |
-Infraestructura | Bodega`.
+Infraestructura | Bodega | Coordinador`. `correo` se agregó **al final** de
+`SCHEMA.USUARIO` (mismo motivo de siempre — no desalinear filas existentes); hoy se usa
+solo como `replyTo` en la notificación de tickets nuevos (ver
+`notificarTicket`/`MAIL_NOTIFICACIONES` más abajo), no para enviar login/clave por correo.
 
 ### `admin_catalogo`
 Alta de un material, herramienta o empresa desde la UI de Administración. También
@@ -273,6 +276,28 @@ registros nuevos automáticamente ni guarda nada sin que el usuario revise y con
 3. Sin esta propiedad configurada, la acción responde
    `{"status":"error","message":"Falta configurar GEMINI_API_KEY..."}` y el botón "Leer
    con IA" muestra ese mensaje — el resto de la app sigue funcionando normal.
+
+---
+
+## Notificación por correo al ingresar un ticket
+
+`guardarObservacion` llama a `notificarTicket(o, ticket)` cada vez que se crea un ticket
+nuevo (`!prev`, o sea que no existía antes por `id_local`) — tanto levantamientos
+normales como emergencias. Reemplaza al antiguo `alertaEmergencia`, que solo cubría
+emergencias y usaba la propiedad `MAIL_EMERGENCIA`.
+
+**Requiere configurar el destino** en el editor de Apps Script: **Extensiones →
+Propiedades del proyecto → Propiedades del script → Agregar propiedad del script**,
+nombre `MAIL_NOTIFICACIONES`, valor `rodrigo.bascunan@sleppuelche.gob.cl`. Sin esta
+propiedad configurada, `notificarTicket` no hace nada (falla silenciosa, igual que antes
+con `MAIL_EMERGENCIA`) — el resto de la creación del ticket sigue funcionando normal.
+
+Por ahora el destino está centralizado en una sola casilla (todos los tickets, de
+cualquier colegio o usuario, llegan al mismo correo). Si el usuario que levantó el ticket
+tiene `correo` cargado en su ficha (`USUARIO.correo`), se usa como `replyTo` del correo,
+para que una respuesta directa le llegue a esa persona aunque el envío esté centralizado.
+El cuerpo incluye: ticket, establecimiento, tipo de emergencia y continuidad de clases
+(solo si `es_emergencia`), prioridad, descripción y quién lo ingresó.
 
 ---
 

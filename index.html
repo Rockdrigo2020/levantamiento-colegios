@@ -2678,7 +2678,7 @@ function pintarAdminUsuarios() {
     <div class="record-item" style="cursor:default">
       <div class="record-header"><div style="flex:1">
         <div class="record-name">${esc(u.nombre)}</div>
-        <div class="record-meta">${esc(u.usuario_login)} · <span class="chip">${esc(u.perfil)}</span></div>
+        <div class="record-meta">${esc(u.usuario_login)} · <span class="chip">${esc(u.perfil)}</span>${u.correo?` · ${esc(u.correo)}`:''}</div>
       </div>
       <button class="btn-icon" onclick='abrirFormUsuario(${JSON.stringify(u).replace(/'/g,"&apos;")})'>✏️</button></div>
     </div>`).join('') : '<p style="color:var(--muted);padding:12px">Sin usuarios en el catálogo local. Sincroniza con internet.</p>';
@@ -2690,6 +2690,7 @@ function abrirFormUsuario(u) {
     <input type="hidden" id="us-id" value="${esc(u.id_usuario||'')}">
     <div class="mb-3"><label>Nombre completo</label><input type="text" id="us-nombre" value="${esc(u.nombre||'')}"></div>
     <div class="mb-3"><label>Usuario (login)</label><input type="text" id="us-login" value="${esc(u.usuario_login||'')}" autocapitalize="none"></div>
+    <div class="mb-3"><label>Correo (para notificaciones de tickets)</label><input type="email" id="us-correo" value="${esc(u.correo||'')}" autocapitalize="none"></div>
     <div class="mb-3"><label>Clave ${u.id_usuario?'(dejar vacío para no cambiar)':''}</label><input type="password" id="us-clave"></div>
     <div class="mb-3"><label>Perfil</label>
       <select id="us-perfil">
@@ -2710,6 +2711,7 @@ async function guardarUsuario() {
   const idExistente = document.getElementById('us-id').value;
   const u = {
     id_usuario: idExistente || uid('USR'), nombre, usuario_login: login,
+    correo: document.getElementById('us-correo').value.trim(),
     clave: document.getElementById('us-clave').value, perfil: document.getElementById('us-perfil').value,
     id_establecimiento: document.getElementById('us-estab').value || '', es_edicion: !!idExistente,
     id_usuario_actor: sesion.id_usuario, id_local: uid('ADM'), synced:false

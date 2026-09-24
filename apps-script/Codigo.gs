@@ -109,7 +109,7 @@ const SCHEMA = {
   // stock/minimo: agregados para el Módulo 3 (Bodega). Las filas ya existentes quedan en
   // blanco hasta que reciban stock por bodega_recepcion o se editen desde Administración.
   MATERIAL:            ['id_material','nombre','unidad','costo_referencial','stock','minimo'],
-  USUARIO:             ['id_usuario','usuario','hash','nombre','perfil','id_establecimiento','activo','telefono'],
+  USUARIO:             ['id_usuario','usuario','hash','nombre','perfil','id_establecimiento','activo','telefono','correo'],
   CONVERSACION:        ['telefono','estado','datos','ultimo_msg','actualizado'],
   // id_gestor_asignado / fotos_antes_urls: agregados (Módulo 5 y galería multi-foto).
   // cantidad: cuántas unidades del elemento específico están afectadas (ej: 3 enchufes, 2 llaves).
@@ -247,7 +247,7 @@ function login(d) {
     .map(a => a.id_establecimiento);
   return {status:'ok', usuario:{
     id_usuario: u.id_usuario, nombre: u.nombre, perfil: u.perfil,
-    id_establecimiento: u.id_establecimiento || '',
+    id_establecimiento: u.id_establecimiento || '', correo: u.correo || '',
     establecimientos_asignados: asignados
   }};
 }
@@ -343,7 +343,7 @@ function guardarObservacion(d) {
     justificacion: (prev && prev.justificacion) || o.justificacion || '',
     actualizado: new Date()
   });
-  if (o.es_emergencia && !prev) alertaEmergencia(o, ticket);
+  if (!prev) notificarTicket(o, ticket);
   return {status:'ok', ticket:ticket, id_local:o.id_local};
 }
 
@@ -428,15 +428,29 @@ function priorizar(d) {
   return {status:'ok'};
 }
 
-function alertaEmergencia(o, ticket) {
+/** Notificación por correo al ingresar un ticket (observación) nuevo, sea o no emergencia.
+ *  Destino centralizado por ahora en la propiedad de script MAIL_NOTIFICACIONES; si el
+ *  usuario que levanta el ticket tiene correo propio, se usa como replyTo para que las
+ *  respuestas le lleguen directo a él aunque el envío se centralice. */
+function notificarTicket(o, ticket) {
   try {
-    const dest = PropertiesService.getScriptProperties().getProperty('MAIL_EMERGENCIA');
+    const dest = PropertiesService.getScriptProperties().getProperty('MAIL_NOTIFICACIONES');
     if (!dest) return;
-    MailApp.sendEmail(dest, 'EMERGENCIA ' + ticket,
-      'Ticket: ' + ticket + '\nTipo: ' + o.tipo_emergencia +
-      '\nContinuidad de clases: ' + (o.continuidad_clases || 'no informado') +
-      '\nDescripcion: ' + o.descripcion);
-  } catch (e) { console.warn('alerta email fallo: ' + e); }
+    const estab = o.id_establecimiento ? buscar('ESTABLECIMIENTO', 'id_establecimiento', o.id_establecimiento) : null;
+    const usuario = o.id_usuario_levanta ? buscar('USUARIO', 'id_usuario', o.id_usuario_levanta) : null;
+    const asunto = (o.es_emergencia ? 'EMERGENCIA ' : 'Nuevo ticket ') + ticket +
+      (estab ? ' · ' + estab.nombre : '');
+    const cuerpo = 'Ticket: ' + ticket +
+      '\nEstablecimiento: ' + (estab ? estab.nombre : (o.id_establecimiento || 'no informado')) +
+      (o.es_emergencia ? '\nTipo de emergencia: ' + o.tipo_emergencia +
+        '\nContinuidad de clases: ' + (o.continuidad_clases || 'no informado') : '') +
+      '\nPrioridad: ' + (o.prioridad || 'Por evaluar') +
+      '\nDescripcion: ' + (o.descripcion || '') +
+      '\nIngresado por: ' + (usuario ? usuario.nombre : (o.id_usuario_levanta || 'no informado'));
+    const opciones = {};
+    if (usuario && usuario.correo) opciones.replyTo = usuario.correo;
+    MailApp.sendEmail(dest, asunto, cuerpo, opciones);
+  } catch (e) { console.warn('notificacion email fallo: ' + e); }
 }
 
 /* ======================================================================
@@ -717,7 +731,8 @@ function adminUsuario(d) {
     id_usuario: id, usuario: u.usuario_login,
     hash: u.clave ? hash(u.clave) : ((prev && prev.hash) || hash('cambiar123')),
     nombre: u.nombre, perfil: u.perfil, id_establecimiento: u.id_establecimiento || '',
-    activo: (prev && prev.activo) || 'true', telefono: (prev && prev.telefono) || ''
+    activo: (prev && prev.activo) || 'true', telefono: (prev && prev.telefono) || '',
+    correo: u.correo || (prev && prev.correo) || ''
   });
   return {status:'ok', id_usuario:id};
 }
