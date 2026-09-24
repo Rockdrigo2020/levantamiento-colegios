@@ -138,6 +138,11 @@ const SCHEMA = {
   BODEGA_CUSTODIA:     ['id_herramienta','id_usuario','estado','fecha','actualizado'],
   BODEGA_RECEPCION:    ['id_local','id_material','cantidad','valor_unitario','proveedor',
                         'documento','fecha','id_usuario','foto_url','actualizado'],
+  // Compras pagadas con caja chica: se registran con foto de la boleta y suman directo al
+  // stock del material elegido (igual que BODEGA_RECEPCION), pero quedan en su propia hoja
+  // para poder reportar "qué se compró con caja chica" sin mezclarlo con compras por OC/factura.
+  CAJA_CHICA:          ['id_local','id_material','cantidad','precio_unitario','id_usuario',
+                        'foto_boleta_url','glosa','fecha','actualizado'],
 
   // ---- Módulo 5 · Gestión y control ----
   EMPRESA:             ['id_empresa','nombre','rut'],
@@ -208,6 +213,8 @@ function doPost(e) {
       case 'bodega_cierre_material':         return json(bodegaCierreMaterial(d));
       case 'bodega_devolucion_herramienta':  return json(bodegaDevolucionHerramienta(d));
       case 'bodega_recepcion':               return json(bodegaRecepcion(d));
+      case 'bodega_caja_chica':              return json(bodegaCajaChica(d));
+      case 'caja_chica_pull':                return json(cajaChicaPull(d));
       // ---- Módulo 5 · Gestión y control ----
       case 'gestion_pull':          return json(gestionPull(d));
       case 'gestion_oc':            return json(gestionOC(d));
@@ -589,6 +596,34 @@ function bodegaRecepcion(d) {
   return {status:'ok'};
 }
 
+/** Compra pagada con caja chica: igual que bodegaRecepcion (suma stock, guarda foto de
+ *  respaldo), pero en su propia hoja para reportar "qué se compró con caja chica" y por
+ *  quién, sin mezclarlo con las compras por OC/factura de bodegaRecepcion. */
+function bodegaCajaChica(d) {
+  const c = d.data || {};
+  if (!c.id_local) return {status:'error', message:'falta id_local'};
+  if (!permisoBodega(c.id_usuario)) return {status:'error', message:'sin permiso para registrar caja chica'};
+  const prev = buscar('CAJA_CHICA', 'id_local', c.id_local);
+  const url = (c.fotos && c.fotos[0]) ? subirFoto(c.fotos[0], c.id_local + '_boleta.jpg') : '';
+  if (!prev) {
+    const mat = buscar('MATERIAL', 'id_material', c.id_material);
+    if (mat) { mat.stock = (+mat.stock || 0) + (+c.cantidad || 0); upsert('MATERIAL', 'id_material', mat.id_material, mat); }
+  }
+  upsert('CAJA_CHICA', 'id_local', c.id_local, {
+    id_local: c.id_local, id_material: c.id_material, cantidad: c.cantidad || 0,
+    precio_unitario: c.precio_unitario || 0, id_usuario: c.id_usuario,
+    foto_boleta_url: url || (prev && prev.foto_boleta_url) || '', glosa: c.glosa || '',
+    fecha: c.fecha || new Date(), actualizado: new Date()
+  });
+  return {status:'ok'};
+}
+
+/** Lectura del historial de caja chica para el reporte (Bodega/Infraestructura). */
+function cajaChicaPull(d) {
+  if (!permisoBodega(d.id_usuario)) return {status:'error', message:'sin permiso para ver caja chica'};
+  return {status:'ok', registros: leer('CAJA_CHICA')};
+}
+
 /* ======================================================================
    LECTURA DE DOCUMENTOS CON IA (Gemini) — OC y facturas/guías de bodega
    Requiere una API key gratuita de Google AI Studio (aistudio.google.com/apikey)
@@ -613,6 +648,16 @@ const PROMPT_LEER_FACTURA =
   'campo no aparece en el documento, dejalo como cadena vacia o 0. cantidad y ' +
   'valor_unitario deben ser numeros, nunca texto.';
 
+const PROMPT_LEER_BOLETA =
+  'Eres un asistente que extrae datos estructurados de boletas de compra chilenas ' +
+  '(ferreterias, supermercados u otro comercio) pagadas con caja chica. Devuelve SOLO un ' +
+  'JSON valido (sin texto adicional, sin markdown, sin comillas triples) con esta forma ' +
+  'exacta: {"empresa":"","rut_empresa":"","numero_documento":"","fecha":"YYYY-MM-DD",' +
+  '"items":[{"descripcion":"","unidad":"","cantidad":0,"valor_unitario":0}]}. Si la boleta ' +
+  'no detalla cada linea por separado, usa un solo item con la descripcion general de la ' +
+  'compra. Si un campo no aparece, dejalo como cadena vacia o 0. cantidad y valor_unitario ' +
+  'deben ser numeros, nunca texto.';
+
 function leerDocumentoIA(d) {
   if (!permisoBodega(d.id_usuario)) return {status:'error', message:'sin permiso para leer documentos'};
   const imagen = d.imagen;
@@ -623,7 +668,9 @@ function leerDocumentoIA(d) {
   const m = String(imagen).match(/^data:(.*?);base64,(.*)$/);
   if (!m) return {status:'error', message:'formato de documento invalido'};
   const mime = m[1], b64 = m[2];
-  const prompt = d.tipo === 'factura' ? PROMPT_LEER_FACTURA : PROMPT_LEER_OC;
+  const prompt = d.tipo === 'factura' ? PROMPT_LEER_FACTURA
+               : d.tipo === 'boleta'  ? PROMPT_LEER_BOLETA
+               : PROMPT_LEER_OC;
 
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
   const payload = {

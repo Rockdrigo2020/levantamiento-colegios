@@ -579,6 +579,7 @@
     <button class="tab-btn" id="tab-levantamiento" onclick="showTab('levantamiento')">Levantar</button>
     <button class="tab-btn" id="tab-subsanacion" onclick="showTab('subsanacion')">Subsanar</button>
     <button class="tab-btn" id="tab-bodega" onclick="showTab('bodega')">Bodega</button>
+    <button class="tab-btn" id="tab-cajachica" onclick="showTab('cajachica')">🧾 Caja Chica</button>
     <button class="tab-btn" id="tab-registros" onclick="showTab('registros')">Tickets</button>
     <button class="tab-btn" id="tab-gestion" onclick="showTab('gestion')">Gestión</button>
     <button class="tab-btn" id="tab-seguimiento" onclick="showTab('seguimiento')">📈 Seguimiento</button>
@@ -795,6 +796,55 @@
           <button class="btn btn-success" onclick="guardarRecepcionBodega()">📥 Registrar recepción</button>
           <div id="rec-ia-list" class="mt-3"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- ---------- CAJA CHICA: boletas de compra que suman stock a Bodega ---------- -->
+    <div id="tab-content-cajachica" style="display:none">
+      <div class="subtab-bar" id="cajachica-subtabs">
+        <button class="subtab-btn active" data-sp="cch-registrar" onclick="showSub('cajachica','cch-registrar')">🧾 Registrar compra</button>
+        <button class="subtab-btn" data-sp="cch-reporte" onclick="showSub('cajachica','cch-reporte')">📊 Reporte</button>
+      </div>
+
+      <!-- Registrar compra -->
+      <div class="subpanel on" id="cch-registrar">
+        <div class="card">
+          <div class="card-title mb-3">Compra pagada con caja chica</div>
+          <div class="mb-3">
+            <input type="file" id="cch-ia-file" accept="image/*,.pdf" style="display:none" onchange="leerBoletaConIA(this)">
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cch-ia-file').click()">🤖 Leer boleta con IA</button>
+            <p id="cch-ia-status" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
+          </div>
+          <div class="mb-3"><label>Elemento</label><select id="cch-material"></select></div>
+          <div class="grid-2 mb-3">
+            <div><label>Cantidad</label><input type="number" id="cch-cantidad" min="1" step="1" value="1"></div>
+            <div><label>Precio unitario</label><input type="number" id="cch-precio" min="0" step="1" placeholder="$"></div>
+          </div>
+          <div class="mb-3"><label>Motivo / glosa (opcional)</label><input type="text" id="cch-glosa" placeholder="Ej: compra urgente ferretería"></div>
+          <div class="mb-3">
+            <label>Foto de la boleta</label>
+            <div id="cch-fotos-grid" class="photo-grid"></div>
+            <input type="file" id="cch-file" accept="image/*" style="display:none" onchange="handleMultiPhoto('cch',this)">
+          </div>
+          <button class="btn btn-success" onclick="guardarCajaChica()">💾 Registrar compra</button>
+          <div id="cch-ia-list" class="mt-3"></div>
+        </div>
+      </div>
+
+      <!-- Reporte -->
+      <div class="subpanel" id="cch-reporte">
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-val" id="kpi-cch-total">$0</div><div class="kpi-lbl">Total gastado</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="kpi-cch-items">0</div><div class="kpi-lbl">Compras registradas</div></div>
+        </div>
+        <div class="card mb-3">
+          <div class="grid-2 mb-3">
+            <div><label>Desde</label><input type="date" id="cch-rep-desde" onchange="pintarReporteCajaChica()"></div>
+            <div><label>Hasta</label><input type="date" id="cch-rep-hasta" onchange="pintarReporteCajaChica()"></div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="exportarCajaChicaExcel()">⬇️ Exportar Excel</button>
+        </div>
+        <div id="cch-reporte-list"></div>
       </div>
     </div>
 
@@ -1062,7 +1112,7 @@ const LS = {
   obs:'lev_obs', sub:'lev_sub', cola:'lev_cola', tema:'theme',
   inv:'lev_inv', bodcola:'lev_bodcola', ocs:'lev_ocs',
   validcola:'lev_validcola', admincola:'lev_admincola',
-  asig:'lev_asig', asigcola:'lev_asigcola'
+  asig:'lev_asig', asigcola:'lev_asigcola', cch:'lev_cch'
 };
 const leerLS = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch(e) { return def; } };
 
@@ -1079,8 +1129,8 @@ let cola     = leerLS(LS.cola, []);
 let isDark   = localStorage.getItem(LS.tema) !== 'light';
 
 // Fotos: cada tipo de formulario guarda un arreglo de ids de IndexedDB (multi-foto)
-let currentFotos = {lev:[], sub:[], emg:[], rec:[], avc:[]};
-const MAX_FOTOS  = {lev:3,  sub:3,  emg:2,  rec:2,  avc:1};
+let currentFotos = {lev:[], sub:[], emg:[], rec:[], avc:[], cch:[]};
+const MAX_FOTOS  = {lev:3,  sub:3,  emg:2,  rec:2,  avc:1,  cch:1};
 let borrador = {};          // levantamiento en curso
 let pasoActual = 1;
 let subActual  = null;      // ticket que se está subsanando
@@ -1090,6 +1140,8 @@ let matSel     = [];        // materiales de la subsanación en curso (contra sa
 let inv       = leerLS(LS.inv, {materiales:[], herramientas:[], saldos:[], custodia:[]});
 let bodCola   = leerLS(LS.bodcola, []);   // entregas/recepciones locales sin sincronizar
 let bodTipo   = 'material';
+let cajaChica = leerLS(LS.cch, []);       // historial de compras con caja chica (reporte)
+let cchDetectados = [];
 
 // ---- Módulo 5 · Gestión y control ----
 let ocs       = leerLS(LS.ocs, []);
@@ -1207,6 +1259,8 @@ function entrarApp() {
   document.getElementById('tab-subsanacion').style.display  = (p==='Director'||p==='Bodega'||p==='Coordinador') ? 'none' : '';
   // Bodega (Módulo 3): Infraestructura y el propio Encargado de bodega
   document.getElementById('tab-bodega').style.display = (p==='Infraestructura'||p==='Bodega') ? '' : 'none';
+  // Caja Chica: mismo acceso que Bodega, porque suma stock igual que una recepción
+  document.getElementById('tab-cajachica').style.display = (p==='Infraestructura'||p==='Bodega') ? '' : 'none';
   // Gestión y control (Módulo 5): Infraestructura, y Coordinador solo ve el subtab Asignaciones
   document.getElementById('tab-gestion').style.display = (p==='Infraestructura'||p==='Coordinador') ? '' : 'none';
   document.querySelectorAll('#gestion-subtabs .subtab-btn:not([data-sp="ges-asignaciones"])')
@@ -2062,6 +2116,12 @@ async function sincronizarTodo(silencioso) {
     guardar(LS.inv, inv);
   }
 
+  // 3b) Caja chica: historial de compras para el reporte (mismo acceso que Bodega)
+  if (sesion.perfil === 'Infraestructura' || sesion.perfil === 'Bodega') {
+    const rc = await api({action:'caja_chica_pull', id_usuario:sesion.id_usuario});
+    if (rc && rc.status==='ok') { cajaChica = rc.registros||[]; guardar(LS.cch, cajaChica); }
+  }
+
   // 4) Gestión (solo Infraestructura): OC, empresas y demás bases de administración
   if (sesion.perfil === 'Infraestructura') {
     const rg = await api({action:'gestion_pull'});
@@ -2164,6 +2224,7 @@ setInterval(()=>{ if(navigator.onLine && cola.length && sesion) sincronizarTodo(
 function showSub(grupo, id) {
   const map = {
     bodega: ['bod-inventario','bod-entregar','bod-custodia','bod-recepcion'],
+    cajachica: ['cch-registrar','cch-reporte'],
     gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-reportes','ges-analitica','ges-asignaciones'],
     admin: ['adm-usuarios','adm-materiales','adm-herramientas','adm-empresas','adm-establecimientos']
   }[grupo];
@@ -2180,7 +2241,9 @@ function showSub(grupo, id) {
     'adm-herramientas': ()=>pintarAdminCatalogo('herramienta'), 'adm-empresas': ()=>pintarAdminCatalogo('empresa'),
     'adm-establecimientos': ()=>pintarAdminCatalogo('establecimiento'),
     'ges-reportes': pintarResumenReporte,
-    'ges-asignaciones': pintarAsignaciones
+    'ges-asignaciones': pintarAsignaciones,
+    'cch-registrar': ()=>{ cchDetectados=[]; pintarCchDetectados(); const s=document.getElementById('cch-ia-status'); if(s) s.textContent=''; },
+    'cch-reporte': pintarReporteCajaChica
   };
   if (refrescos[id]) refrescos[id]();
 }
@@ -2478,6 +2541,146 @@ function poblarRecepcionSelect() {
   if (!sel) return;
   sel.innerHTML = (inv.materiales||[]).map(m=>`<option value="${esc(m.id_material)}">${esc(m.nombre)}</option>`).join('')
     || '<option value="">Sin catálogo</option>';
+}
+
+// ==================== CAJA CHICA: boletas de compra que suman stock a Bodega ====================
+// Misma lógica que la Recepción de bodega (suma stock, guarda foto de respaldo), pero en su
+// propia cola/hoja (CAJA_CHICA) para poder reportar aparte "qué se compró con caja chica" y
+// por quién. Reutiliza bodCola/bodega_* en el envío: el action se llama 'bodega_caja_chica'
+// justamente para que enviarUno() lo maneje gratis (mismo prefijo 'bodega_').
+function poblarCajaChicaSelect() {
+  const sel = document.getElementById('cch-material');
+  if (!sel) return;
+  sel.innerHTML = (inv.materiales||[]).map(m=>`<option value="${esc(m.id_material)}">${esc(m.nombre)}</option>`).join('')
+    || '<option value="">Sin catálogo</option>';
+}
+async function registrarCajaChica(idMat, cant, precio, glosa, fotos) {
+  const reg = {
+    id_local: uid('CCH'), tipo:'caja_chica', id_material:idMat, cantidad:cant,
+    precio_unitario: precio||0, glosa: glosa||'', fecha:new Date().toISOString(),
+    id_usuario:sesion.id_usuario, fotos: fotos||[], synced:false
+  };
+  const m = (inv.materiales||[]).find(x=>x.id_material===idMat);
+  if (m) { m.stock = +m.stock + cant; guardar(LS.inv, inv); }
+  bodCola.push(reg); guardar(LS.bodcola, bodCola);
+  encolar('bodega_caja_chica', reg.id_local);
+  const ok = await enviarUno('bodega_caja_chica', reg.id_local);
+  pintarInventario();
+  // Refleja la compra en el reporte local de inmediato, sin esperar el próximo caja_chica_pull.
+  cajaChica.push({id_local:reg.id_local, id_material:idMat, cantidad:cant, precio_unitario:precio||0,
+    id_usuario:sesion.id_usuario, glosa:glosa||'', fecha:reg.fecha});
+  guardar(LS.cch, cajaChica);
+  return ok;
+}
+async function guardarCajaChica() {
+  const idMat = document.getElementById('cch-material').value;
+  const cant  = +document.getElementById('cch-cantidad').value || 0;
+  if (!idMat) { toast('⚠️ Selecciona el elemento','err'); return; }
+  if (cant<=0){ toast('⚠️ Cantidad inválida','err'); return; }
+
+  const ok = await registrarCajaChica(idMat, cant,
+    +document.getElementById('cch-precio').value||0,
+    document.getElementById('cch-glosa').value.trim(),
+    currentFotos.cch.slice());
+  toast(ok ? '✅ Compra registrada' : '💾 Guardada, se enviará sola', 'ok');
+  currentFotos.cch = []; pintarFotosGrid('cch');
+  document.getElementById('cch-glosa').value=''; document.getElementById('cch-precio').value='';
+  document.getElementById('cch-cantidad').value=1;
+}
+async function leerBoletaConIA(input) {
+  const file = (input.files||[])[0];
+  input.value = '';
+  if (!file) return;
+  const status = document.getElementById('cch-ia-status');
+  status.textContent = '🤖 Leyendo boleta con IA...';
+  const b64 = await leerArchivoB64(file);
+  const r = await api({action:'leer_documento_ia', imagen:b64, tipo:'boleta', id_usuario:sesion.id_usuario}, 90000);
+  if (!r || r.status !== 'ok') { status.textContent=''; toast('⚠️ ' + (r?.message || 'No se pudo leer la boleta'), 'err'); return; }
+  const d = r.datos || {};
+  const items = d.items || [];
+  if (items.length <= 1) {
+    const it = items[0] || {};
+    const mat = matchMaterialPorNombre(it.descripcion);
+    if (mat) document.getElementById('cch-material').value = mat.id_material;
+    else if (it.descripcion) toast('⚠️ No se encontró "'+it.descripcion+'" en el catálogo — selecciónalo manualmente', 'err');
+    if (it.cantidad) document.getElementById('cch-cantidad').value = +it.cantidad;
+    if (it.valor_unitario) document.getElementById('cch-precio').value = +it.valor_unitario;
+    cchDetectados = [];
+  } else {
+    cchDetectados = items.map(it => ({
+      descripcion: it.descripcion||'',
+      id_material: matchMaterialPorNombre(it.descripcion)?.id_material || '',
+      cantidad: +it.cantidad||1, precio: +it.valor_unitario||0
+    }));
+  }
+  pintarCchDetectados();
+  status.textContent = '✅ Datos leídos — revisa antes de registrar';
+  toast('✅ Boleta leída: ' + items.length + ' ítem(s) detectados', 'ok');
+}
+function pintarCchDetectados() {
+  const c = document.getElementById('cch-ia-list');
+  if (!c) return;
+  c.innerHTML = cchDetectados.length ? '<label>Ítems detectados (revisa y registra uno por uno)</label>' + cchDetectados.map((it,i)=>`
+    <div class="partida-row">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${esc(it.descripcion)}</div>
+      <select onchange="setCchDetectado(${i},'id_material',this.value)">
+        <option value="">Elemento...</option>
+        ${(inv.materiales||[]).map(m=>`<option value="${esc(m.id_material)}" ${it.id_material===m.id_material?'selected':''}>${esc(m.nombre)}</option>`).join('')}
+      </select>
+      <div class="grid-2 mt-3">
+        <input type="number" placeholder="Cantidad" value="${esc(it.cantidad)}" onchange="setCchDetectado(${i},'cantidad',this.value)">
+        <input type="number" placeholder="Precio unit." value="${esc(it.precio)}" onchange="setCchDetectado(${i},'precio',this.value)">
+      </div>
+      <button class="btn btn-success btn-sm mt-3" onclick="registrarCajaChicaDetectada(${i})">💾 Registrar este ítem</button>
+    </div>`).join('') : '';
+}
+function setCchDetectado(i, campo, val) { cchDetectados[i][campo] = campo==='id_material' ? val : +val; }
+async function registrarCajaChicaDetectada(i) {
+  const it = cchDetectados[i]; if (!it) return;
+  if (!it.id_material) { toast('⚠️ Selecciona el elemento para "'+it.descripcion+'"','err'); return; }
+  if (!(it.cantidad>0)) { toast('⚠️ Cantidad inválida','err'); return; }
+  const ok = await registrarCajaChica(it.id_material, it.cantidad, it.precio, it.descripcion, []);
+  toast(ok ? '✅ Compra registrada' : '💾 Guardada, se enviará sola', 'ok');
+  cchDetectados.splice(i,1);
+  pintarCchDetectados();
+}
+function filasCajaChica() {
+  const desde = document.getElementById('cch-rep-desde')?.value;
+  const hasta = document.getElementById('cch-rep-hasta')?.value;
+  return cajaChica.filter(r=>{
+    if (desde && new Date(r.fecha) < new Date(desde)) return false;
+    if (hasta && new Date(r.fecha) > new Date(hasta+'T23:59:59')) return false;
+    return true;
+  }).slice().sort((a,b)=> new Date(b.fecha) - new Date(a.fecha));
+}
+function pintarReporteCajaChica() {
+  const filas = filasCajaChica();
+  const total = filas.reduce((a,r)=> a + (+r.cantidad||0)*(+r.precio_unitario||0), 0);
+  document.getElementById('kpi-cch-total').textContent = '$' + total.toLocaleString('es-CL');
+  document.getElementById('kpi-cch-items').textContent = filas.length;
+  const c = document.getElementById('cch-reporte-list');
+  c.innerHTML = filas.length ? filas.map(r=>`
+    <div class="record-item" style="cursor:default">
+      <div class="record-header"><div style="flex:1">
+        <div class="record-name">${esc(nomMat(r.id_material))}</div>
+        <div class="record-meta">${esc(r.cantidad)} × $${(+r.precio_unitario||0).toLocaleString('es-CL')} =
+          <b>$${((+r.cantidad||0)*(+r.precio_unitario||0)).toLocaleString('es-CL')}</b></div>
+        <div class="record-meta">👤 ${esc(nomUsuario(r.id_usuario))} · ${esc(fechaCL(r.fecha))}${r.glosa?' · '+esc(r.glosa):''}</div>
+      </div>${r.foto_boleta_url?`<img data-ph="${esc(r.foto_boleta_url)}" class="record-thumb" alt="">`:''}</div>
+    </div>`).join('') : '<div class="empty"><div class="ico">🧾</div><p>Sin compras de caja chica en el rango elegido</p></div>';
+  hydratePhotos(c);
+}
+function exportarCajaChicaExcel() {
+  if (typeof XLSX === 'undefined') { toast('⚠️ Sin conexión para cargar el motor de Excel','err'); return; }
+  const filas = filasCajaChica().map(r=>({
+    Elemento: nomMat(r.id_material), Cantidad: r.cantidad, Precio_unitario: r.precio_unitario,
+    Monto_total: (+r.cantidad||0)*(+r.precio_unitario||0), Usuario: nomUsuario(r.id_usuario),
+    Glosa: r.glosa||'', Fecha: fechaCL(r.fecha)
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Caja Chica');
+  XLSX.writeFile(wb, 'caja_chica_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('✅ Excel descargado','ok');
 }
 
 // ==================== MÓDULO 2 (extensión) · VALIDACIÓN DE CIERRES ====================
@@ -3629,7 +3832,7 @@ function refrescarTodo() {
 }
 
 function showTab(t) {
-  ['dashboard','levantamiento','subsanacion','registros','bodega','gestion','seguimiento'].forEach(x=>{
+  ['dashboard','levantamiento','subsanacion','registros','bodega','cajachica','gestion','seguimiento'].forEach(x=>{
     document.getElementById('tab-content-'+x).style.display = x===t ? 'block':'none';
     document.getElementById('tab-'+x).classList.toggle('active', x===t);
   });
@@ -3637,6 +3840,7 @@ function showTab(t) {
   if (t==='registros')   renderRegistros();
   if (t==='dashboard')   refrescarTodo();
   if (t==='bodega')      { poblarRecepcionSelect(); showSub('bodega','bod-inventario'); }
+  if (t==='cajachica')   { poblarCajaChicaSelect(); showSub('cajachica','cch-registrar'); }
   // El Coordinador solo tiene acceso al subtab de Asignaciones dentro de Gestión
   if (t==='gestion')     showSub('gestion', sesion.perfil==='Coordinador' ? 'ges-asignaciones' : 'ges-bandeja');
   if (t==='seguimiento') pintarSeguimiento();
