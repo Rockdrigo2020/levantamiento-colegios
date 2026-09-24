@@ -146,6 +146,32 @@ Ingreso de stock por compra (aumenta `materiales[].stock`).
 }}
 ```
 
+### `bodega_caja_chica`
+Compra pagada con caja chica (pestaña **🧾 Caja Chica**, mismo acceso que Bodega:
+Infraestructura o el perfil Bodega). Igual que `bodega_recepcion` — suma stock del
+material elegido y guarda la foto de respaldo (aquí, la boleta) — pero queda en su propia
+hoja `CAJA_CHICA` para poder reportar aparte qué se compró con caja chica y quién lo hizo.
+```json
+{"action":"bodega_caja_chica", "data":{
+  "id_local":"CCH_xxx", "id_material":"MAT_1", "cantidad":4, "precio_unitario":1800,
+  "glosa":"Compra urgente ferretería", "fecha":"...",
+  "id_usuario":"USR_1", "fotos":["data:image/jpeg;base64,..."]
+}}
+```
+`fotos[0]` (si viene) se sube a Drive como `foto_boleta_url`. El usuario que registra la
+compra queda asociado en `id_usuario` — es quien aparece en el reporte de Caja Chica.
+
+### `caja_chica_pull`
+Trae el historial completo de `CAJA_CHICA` para el subtab **📊 Reporte** (mismo
+`permisoBodega`).
+```json
+{"action":"caja_chica_pull", "id_usuario":"USR_1"}
+```
+Respuesta: `{"status":"ok", "registros":[{"id_local":..., "id_material":..., "cantidad":...,
+"precio_unitario":..., "id_usuario":..., "foto_boleta_url":..., "glosa":..., "fecha":...}]}`.
+El frontend calcula el monto total (`cantidad × precio_unitario`) y resuelve el nombre del
+material/usuario localmente contra `inv.materiales`/`cat.usuarios` — no viaja duplicado.
+
 ---
 
 ## Acciones NUEVAS · Módulo 5 (Gestión y control) — acceso exclusivo perfil Infraestructura
@@ -233,11 +259,12 @@ desalinear filas ya existentes).
 ## Acciones NUEVAS · Lectura de documentos con IA (OC y facturas)
 
 ### `leer_documento_ia`
-Sube una foto o PDF de una OC o una factura/guía de despacho y devuelve los campos
-estructurados que Gemini detectó, para autocompletar el formulario correspondiente
-(**Gestión → Nueva OC** o **Bodega → Recepción**). No escribe nada en la planilla — es
-de solo lectura, y por eso se responde sin tomar el `LockService` lock (una llamada a
-Gemini puede demorar varios segundos).
+Sube una foto o PDF de una OC, una factura/guía de despacho o una boleta de caja chica y
+devuelve los campos estructurados que Gemini detectó, para autocompletar el formulario
+correspondiente (**Gestión → Nueva OC**, **Bodega → Recepción** o **Caja Chica →
+Registrar compra**). No escribe nada en la planilla — es de solo lectura, y por eso se
+responde sin tomar el `LockService` lock (una llamada a Gemini puede demorar varios
+segundos).
 
 ```json
 {"action":"leer_documento_ia", "imagen":"data:application/pdf;base64,...", "tipo":"oc",
@@ -245,7 +272,7 @@ Gemini puede demorar varios segundos).
 ```
 `imagen` es un data URL completo (`data:<mime>;base64,<datos>`), tal cual lo entrega
 `FileReader.readAsDataURL()` — funciona con fotos (`image/*`) y PDF. `tipo` ∈ `oc |
-factura`. Requiere que quien llama tenga perfil `Infraestructura` o `Bodega`
+factura | boleta`. Requiere que quien llama tenga perfil `Infraestructura` o `Bodega`
 (`permisoBodega`).
 
 Respuesta para `tipo:"oc"`:
@@ -256,7 +283,9 @@ Respuesta para `tipo:"oc"`:
   "items":[{"descripcion":"Pintura fachada", "unidad":"m2", "cantidad":120, "monto":850000}]
 }}
 ```
-Respuesta para `tipo:"factura"`:
+Respuesta para `tipo:"factura"` y `tipo:"boleta"` (misma forma — una boleta de caja chica
+es, en la práctica, una factura simplificada; si no detalla líneas por separado, Gemini
+devuelve un solo ítem con la descripción general de la compra):
 ```json
 {"status":"ok", "datos":{
   "empresa":"Ferretería Ejemplo Ltda", "rut_empresa":"77.333.444-5",
