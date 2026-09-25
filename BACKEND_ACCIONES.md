@@ -380,7 +380,10 @@ Coordinador que hizo la asignación (`id_usuario_coordinador`), si tiene uno car
 - **`login`**: la respuesta ahora incluye `establecimientos_asignados` (arreglo de
   `id_establecimiento`), calculado desde `ASIGNACION` en el momento del login.
 - **`catalogos`**: el arreglo `usuarios` ahora también viaja cuando quien pide es
-  `Coordinador` (antes solo `Infraestructura`).
+  `Coordinador` o **`Bodega`** (antes solo `Infraestructura`). El caso `Bodega` era un bug
+  real: sin `usuarios[]`, el selector "Entregar a (gestor de mantenimiento)" de Bodega →
+  Entregar quedaba siempre en "Sin usuarios en el catálogo", inutilizando la entrega de
+  materiales/herramientas para ese perfil.
 - **`pull`**: si `d.perfil==='Maestro'` y llega `d.id_establecimientos` (arreglo, no
   vacío), filtra las observaciones a esos establecimientos — igual que ya hacía para
   `Director` con `d.id_establecimiento` (singular). También suma `materiales_usados` a
