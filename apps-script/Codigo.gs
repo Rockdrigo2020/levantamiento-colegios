@@ -260,12 +260,16 @@ function login(d) {
 }
 
 // ============ LECTURA ============
-/** usuarios[] solo viaja si quien pide es perfil Infraestructura (y nunca incluye el hash). */
+/** usuarios[] solo viaja si quien pide es perfil Infraestructura, Coordinador o Bodega
+ *  (y nunca incluye el hash). Bodega lo necesita para el selector "Entregar a (gestor de
+ *  mantenimiento)" y para ver a quién le corresponde cada saldo en Custodia — sin esto,
+ *  el módulo de Bodega queda inutilizable para ese perfil (dropdown siempre vacío). */
 function catalogos(d) {
   d = d || {};
   const solicitante = d.id_usuario ? buscar('USUARIO', 'id_usuario', d.id_usuario) : null;
   const esInfra = !!(solicitante && solicitante.perfil === 'Infraestructura');
   const esCoordinador = !!(solicitante && solicitante.perfil === 'Coordinador');
+  const esBodega = !!(solicitante && solicitante.perfil === 'Bodega');
   return {
     status: 'ok',
     comunas:     leer('COMUNA'),
@@ -277,7 +281,7 @@ function catalogos(d) {
     materiales:  leer('MATERIAL'),
     herramientas: leer('HERRAMIENTA'),
     empresas:    leer('EMPRESA'),
-    usuarios: (esInfra || esCoordinador) ? leer('USUARIO').map(u => ({
+    usuarios: (esInfra || esCoordinador || esBodega) ? leer('USUARIO').map(u => ({
       id_usuario: u.id_usuario, nombre: u.nombre, usuario_login: u.usuario,
       perfil: u.perfil, id_establecimiento: u.id_establecimiento
     })) : [],
