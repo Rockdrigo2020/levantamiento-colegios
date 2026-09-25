@@ -1016,7 +1016,10 @@
             <div><label>Comuna</label><select id="asig-comuna" onchange="poblarSelectColegios('asig-estab', this.value)"></select></div>
             <div><label>Establecimiento</label><select id="asig-estab"><option value="">Elige una comuna primero</option></select></div>
           </div>
+          <div class="mb-3"><label>Tareas a desarrollar</label>
+            <textarea id="asig-tareas" rows="2" placeholder="Ej: revisar luminarias sala 3, cambiar llave de baño estudiantes"></textarea></div>
           <button class="btn btn-primary" onclick="guardarAsignacion()">➕ Asignar</button>
+          <p style="font-size:11px;color:var(--muted);margin-top:6px">Al asignar se envía un correo automático con la ruta (comuna, colegio y tareas) al usuario elegido, si tiene correo cargado en Administración.</p>
         </div>
         <div class="card">
           <div class="card-title mb-3">Asignaciones activas</div>
@@ -3542,7 +3545,7 @@ function pintarAsignaciones() {
           <div class="card-title" style="margin-bottom:6px">${esc(u?u.nombre:idU)}${u?' · '+esc(u.perfil):''}</div>
           ${lista.map(a=>`
             <div class="flex" style="justify-content:space-between;align-items:center;padding:4px 0">
-              <span style="font-size:13px">${esc(nomEstab(a.id_establecimiento))}</span>
+              <span style="font-size:13px">${esc(nomEstab(a.id_establecimiento))}${a.tareas?`<br><span style="font-size:11px;color:var(--muted)">${esc(a.tareas)}</span>`:''}</span>
               <button class="btn-icon" onclick="quitarAsignacion('${esc(a.id_local)}')">✕</button>
             </div>`).join('')}
         </div>`;
@@ -3559,13 +3562,15 @@ async function guardarAsignacion() {
 
   const reg = {
     id_local: uid('ASIG'), id_usuario: idUsuario, id_establecimiento: idEstab,
-    id_usuario_coordinador: sesion.id_usuario, fecha: new Date().toISOString(), activa: true, synced:false
+    id_usuario_coordinador: sesion.id_usuario, fecha: new Date().toISOString(), activa: true,
+    tareas: document.getElementById('asig-tareas').value.trim(), synced:false
   };
   asignaciones.push(reg); guardar(LS.asig, asignaciones);
   asigCola.push(reg); guardar(LS.asigcola, asigCola);
   encolar('asignacion_guardar', reg.id_local);
   const ok = await enviarUno('asignacion_guardar', reg.id_local);
   toast(ok ? '✅ Asignación guardada' : '💾 Guardada, se enviará sola', 'ok');
+  document.getElementById('asig-tareas').value = '';
   pintarAsignaciones();
 }
 async function quitarAsignacion(idLocal) {

@@ -360,10 +360,21 @@ Crea o desactiva una asignación (idempotente por `id_local`).
 ```json
 {"action":"asignacion_guardar", "data":{
   "id_local":"ASIG_x", "id_usuario":"USR_2", "id_establecimiento":"E001",
-  "id_usuario_coordinador":"USR_1", "activa": true
+  "id_usuario_coordinador":"USR_1", "activa": true, "tareas":"Revisar luminarias sala 3"
 }}
 ```
 `activa:false` es la forma de quitar una asignación sin perder el historial de la fila.
+`tareas` (texto libre, "tareas a desarrollar" de la ruta) se agregó **al final** de
+`SCHEMA.ASIGNACION`, mismo motivo de siempre (no desalinear filas ya existentes).
+
+Cada vez que se guarda una asignación **activa** (`activa !== false`), `notificarRuta(a)`
+le envía automáticamente un correo con la ruta diaria al Maestro/Gestor asignado —
+comuna, colegio y tareas a desarrollar — usando el `correo` de su ficha de `USUARIO`
+(no la casilla centralizada `MAIL_NOTIFICACIONES`: acá el destinatario es la persona
+asignada, no Infraestructura). Si esa persona no tiene `correo` cargado, no hay a quién
+avisarle: la asignación se guarda igual, pero no sale correo (falla silenciosa). Al
+desasignar (`activa:false`) no se notifica. El `replyTo` queda en el correo del
+Coordinador que hizo la asignación (`id_usuario_coordinador`), si tiene uno cargado.
 
 ### Cambios en acciones existentes
 - **`login`**: la respuesta ahora incluye `establecimientos_asignados` (arreglo de

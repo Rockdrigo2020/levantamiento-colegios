@@ -156,7 +156,7 @@ const SCHEMA = {
   // activas (varios colegios a su cargo); 'activa' en 'false' es la forma de desasignar sin
   // perder el historial.
   ASIGNACION:          ['id_local','id_usuario','id_establecimiento','id_usuario_coordinador',
-                        'fecha','activa','actualizado']
+                        'fecha','activa','actualizado','tareas']
 };
 
 // ============ ENTRYPOINTS ============
@@ -838,9 +838,35 @@ function asignacionGuardar(d) {
   upsert('ASIGNACION', 'id_local', a.id_local, {
     id_local: a.id_local, id_usuario: a.id_usuario, id_establecimiento: a.id_establecimiento,
     id_usuario_coordinador: a.id_usuario_coordinador, fecha: a.fecha || new Date(),
-    activa: a.activa === false ? 'false' : 'true', actualizado: new Date()
+    activa: a.activa === false ? 'false' : 'true', actualizado: new Date(), tareas: a.tareas || ''
   });
+  // Solo se notifica al asignar/actualizar una ruta activa, no al desasignar (activa:false).
+  if (a.activa !== false) notificarRuta(a);
   return {status:'ok'};
+}
+
+/** Avisa por correo al Maestro/Gestor la ruta diaria que se le acaba de asignar
+ *  (comuna, colegio y tareas a desarrollar). Si el destinatario no tiene correo cargado
+ *  en su ficha de usuario, no hay a quién avisarle: falla silenciosa, igual que el resto
+ *  de las notificaciones por correo de la app. */
+function notificarRuta(a) {
+  try {
+    const destinatario = buscar('USUARIO', 'id_usuario', a.id_usuario);
+    if (!destinatario || !destinatario.correo) return;
+    const estab = a.id_establecimiento ? buscar('ESTABLECIMIENTO', 'id_establecimiento', a.id_establecimiento) : null;
+    const comuna = estab && estab.id_comuna ? buscar('COMUNA', 'id_comuna', estab.id_comuna) : null;
+    const coordinador = a.id_usuario_coordinador ? buscar('USUARIO', 'id_usuario', a.id_usuario_coordinador) : null;
+    const asunto = 'Ruta asignada — ' + (estab ? estab.nombre : a.id_establecimiento);
+    const cuerpo = 'Hola ' + (destinatario.nombre || '') + ',\n\n' +
+      'Se te asignó la siguiente ruta:\n' +
+      'Comuna: ' + (comuna ? comuna.nombre : 'no informada') + '\n' +
+      'Colegio: ' + (estab ? estab.nombre : a.id_establecimiento) + '\n' +
+      'Tareas a desarrollar: ' + (a.tareas || 'sin detalle') + '\n' +
+      'Fecha: ' + (a.fecha || new Date());
+    const opciones = {};
+    if (coordinador && coordinador.correo) opciones.replyTo = coordinador.correo;
+    MailApp.sendEmail(destinatario.correo, asunto, cuerpo, opciones);
+  } catch (e) { console.warn('notificacion ruta fallo: ' + e); }
 }
 
 // ============ CAPA DE DATOS ============
