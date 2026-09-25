@@ -8,12 +8,17 @@
 // v6: BASE se calcula desde self.registration.scope en vez de venir hardcodeado a
 //     /levantamiento-colegios/ — así el sitio funciona sin cambios sin importar en qué
 //     carpeta/dominio lo publique IT (ej. www.empresa.cl/levantapp/).
-const CACHE = 'levantapp-v6';
+// v7: iconos del manifest pasan de SVG embebido a PNG reales (icon-192/512/512-maskable),
+//     requisito de PWABuilder para empaquetar como APK/AAB — se agregan al precache.
+const CACHE = 'levantapp-v7';
 const BASE = self.registration.scope;
 const ASSETS = [
   BASE,
   BASE + 'index.html',
-  BASE + 'manifest.json'
+  BASE + 'manifest.json',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png',
+  BASE + 'icon-512-maskable.png'
 ];
 
 self.addEventListener('install', e => {
