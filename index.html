@@ -867,6 +867,11 @@
           <div class="kpi-card"><div class="kpi-val" id="ges-kpi-eval">0</div><div class="kpi-lbl">Por evaluar</div></div>
           <div class="kpi-card"><div class="kpi-val" id="ges-kpi-emg">0</div><div class="kpi-lbl">Emergencias abiertas</div></div>
         </div>
+        <select id="ges-bandeja-filtro" class="mb-3" onchange="pintarBandejaGestion()">
+          <option value="pendientes">Pendientes</option>
+          <option value="realizados">Realizados</option>
+          <option value="todas">Todas</option>
+        </select>
         <div id="ges-bandeja-list"></div>
       </div>
 
@@ -2727,10 +2732,17 @@ async function validarCierre(idLocalObs, idSubsanacion, conforme) {
 function pintarBandejaGestion() {
   document.getElementById('ges-kpi-eval').textContent = obs.filter(o=>o.prioridad==='Por evaluar' && o.estado!=='Rechazado').length;
   document.getElementById('ges-kpi-emg').textContent  = obs.filter(o=>o.es_emergencia && (o.estado==='Pendiente'||o.estado==='En proceso')).length;
-  const porEvaluar = obs.filter(o=>o.prioridad==='Por evaluar' && o.estado!=='Rechazado');
+  // Filtro de la bandeja: Pendientes (por defecto, lo aún no resuelto), Realizados (el
+  // trabajo ya se ejecutó, esté o no validado) o Todas las observaciones de la red.
+  const filtro = document.getElementById('ges-bandeja-filtro')?.value || 'pendientes';
+  let lista;
+  if (filtro === 'realizados')    lista = obs.filter(o=>o.estado==='Ejecutado'||o.estado==='Cerrado');
+  else if (filtro === 'todas')    lista = obs;
+  else                            lista = obs.filter(o=>o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Reabierto');
+  lista = [...lista].reverse();
   const c = document.getElementById('ges-bandeja-list');
-  c.innerHTML = porEvaluar.length ? porEvaluar.map(tarjeta('openDetalleModal')).join('')
-    : '<div class="empty"><div class="ico">📥</div><p>No hay observaciones por evaluar</p></div>';
+  c.innerHTML = lista.length ? lista.map(tarjeta('openDetalleModal')).join('')
+    : '<div class="empty"><div class="ico">📥</div><p>No hay observaciones para este filtro</p></div>';
   hydratePhotos(c);
 }
 
