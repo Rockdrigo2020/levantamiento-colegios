@@ -1026,6 +1026,14 @@
           <button class="btn btn-primary" onclick="guardarAsignacion()">➕ Asignar</button>
           <p style="font-size:11px;color:var(--muted);margin-top:6px">Al asignar se envía un correo automático con la ruta (comuna, colegio y tareas) al usuario elegido, si tiene correo cargado en Administración.</p>
         </div>
+        <div class="card mb-3">
+          <div class="card-title mb-3">👷 Gestor por comuna</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            El gestor de una comuna recibe un correo por cada ticket nuevo de sus colegios y, cuando
+            el maestro lo deja resuelto, un correo con botones para dar el OK (cerrar) o rechazar
+            (reabrir). Necesita tener correo cargado en Administración → Usuarios.</p>
+          <div id="gestor-comuna-lista"></div>
+        </div>
         <div class="card">
           <div class="card-title mb-3">Asignaciones activas</div>
           <div id="asig-lista"></div>
@@ -2068,9 +2076,9 @@ async function enviarUno(tipo, id) {
     payload = {action:tipo, data: item};
     onOk = () => { item.synced = true; guardar(LS.admincola, adminCola); };
 
-  } else if (tipo === 'asignacion_guardar') {
+  } else if (tipo === 'asignacion_guardar' || tipo === 'comuna_gestor') {
     const item = asigCola.find(x=>x.id_local===id); if (!item) return true;
-    payload = {action:'asignacion_guardar', data: item};
+    payload = {action:tipo, data: item};
     onOk = () => { item.synced = true; guardar(LS.asigcola, asigCola); };
 
   } else return true;
@@ -3538,7 +3546,33 @@ function iaResponder(q) {
 // scopedObs() y el payload de 'pull' en sincronizarTodo()).
 function usuariosAsignables() { return cat?.usuarios_asignables || []; }
 
+function pintarGestoresComuna() {
+  const c = document.getElementById('gestor-comuna-lista');
+  if (!c) return;
+  const usuarios = usuariosAsignables();
+  const comunas = (cat?.comunas||[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
+  c.innerHTML = comunas.length ? comunas.map(co=>`
+    <div class="flex" style="justify-content:space-between;align-items:center;gap:10px;padding:4px 0">
+      <span style="font-size:13px;min-width:110px">${esc(co.nombre)}</span>
+      <select data-gestor-comuna="${esc(co.id_comuna)}" style="flex:1" onchange="guardarGestorComuna('${esc(co.id_comuna)}', this.value)">
+        <option value="">— Sin gestor —</option>
+        ${usuarios.map(u=>`<option value="${esc(u.id_usuario)}" ${String(co.id_gestor||'')===String(u.id_usuario)?'selected':''}>${esc(u.nombre)} · ${esc(u.perfil)}</option>`).join('')}
+      </select>
+    </div>`).join('') : '<p style="color:var(--muted);font-size:12px">Sin comunas en el catálogo. Sincroniza con internet.</p>';
+}
+async function guardarGestorComuna(idComuna, idGestor) {
+  const co = (cat?.comunas||[]).find(x=>x.id_comuna===idComuna); if (!co) return;
+  co.id_gestor = idGestor; guardar(LS.cat, cat);
+  const reg = { id_local: uid('GCOM'), tipo:'comuna_gestor', id_comuna: idComuna, id_gestor: idGestor,
+    id_usuario_actor: sesion.id_usuario, synced:false };
+  asigCola.push(reg); guardar(LS.asigcola, asigCola);
+  encolar('comuna_gestor', reg.id_local);
+  const ok = await enviarUno('comuna_gestor', reg.id_local);
+  toast(ok ? '✅ Gestor de ' + co.nombre + ' actualizado' : '💾 Guardado, se enviará solo', 'ok');
+}
+
 function pintarAsignaciones() {
+  pintarGestoresComuna();
   const selU = document.getElementById('asig-usuario');
   const usuarios = usuariosAsignables();
   selU.innerHTML = usuarios.length
