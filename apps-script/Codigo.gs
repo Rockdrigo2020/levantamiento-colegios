@@ -98,7 +98,7 @@ const DRIVE_ID = '16p1X10k4_dP53NFFZj3tlotnftpRqZSm';            // carpeta Leva
 
 // ============ ESQUEMA ============
 const SCHEMA = {
-  COMUNA:              ['id_comuna','nombre'],
+  COMUNA:              ['id_comuna','nombre','id_gestor'],
   // lat/lng: coordenadas para el mapa de Seguimiento (Módulo 7). Agregadas AL FINAL
   // (mismo motivo que 'cantidad'/'horas' en otras tablas: no desalinear filas existentes).
   ESTABLECIMIENTO:     ['id_establecimiento','id_comuna','rbd','nombre','tipo','direccion','lat','lng'],
@@ -171,6 +171,7 @@ function doGet(e) {
     }
     return ContentService.createTextOutput('forbidden').setMimeType(ContentService.MimeType.TEXT);
   }
+  if (p.voto) return votarCierre(p);
   if (p.t === 'catalogos') return json(catalogos());
   return json({status:'ok', message:'LevantApp API v5', hojas:Object.keys(SCHEMA).length});
 }
@@ -226,6 +227,7 @@ function doPost(e) {
       // ---- Módulo 7 · Coordinación y Seguimiento ----
       case 'asignacion_pull':       return json(asignacionPull(d));
       case 'asignacion_guardar':    return json(asignacionGuardar(d));
+      case 'comuna_gestor':         return json(comunaGestor(d));
       default:            return json({status:'error', message:'accion desconocida: ' + d.action});
     }
   } catch (err) {
@@ -283,7 +285,7 @@ function catalogos(d) {
     empresas:    leer('EMPRESA'),
     usuarios: (esInfra || esCoordinador || esBodega) ? leer('USUARIO').map(u => ({
       id_usuario: u.id_usuario, nombre: u.nombre, usuario_login: u.usuario,
-      perfil: u.perfil, id_establecimiento: u.id_establecimiento
+      perfil: u.perfil, id_establecimiento: u.id_establecimiento, correo: u.correo || ''
     })) : [],
     v: new Date().getTime()
   };
@@ -410,6 +412,12 @@ function guardarSubsanacion(d) {
     obs.estado = !s.resuelto ? 'En proceso' : (s.validado ? 'Cerrado' : 'Ejecutado');
     obs.actualizado = new Date();
     upsert('OBSERVACION', 'ticket', s.ticket, obs);
+    // Solo la primera vez que esta subsanación queda resuelta (los reintentos de red no reenvían).
+    if (s.resuelto && !(prev && prev.resuelto === 'SI')) {
+      const sGuardada = buscar('SUBSANACION', 'id_subsanacion', s.id_subsanacion);
+      if (obs.estado === 'Cerrado') notificarCierre(obs);
+      else solicitarVotoCierre(obs, sGuardada);
+    }
   }
   return {status:'ok', id:s.id_subsanacion};
 }
@@ -439,29 +447,165 @@ function priorizar(d) {
   return {status:'ok'};
 }
 
-/** Notificación por correo al ingresar un ticket (observación) nuevo, sea o no emergencia.
- *  Destino centralizado por ahora en la propiedad de script MAIL_NOTIFICACIONES; si el
- *  usuario que levanta el ticket tiene correo propio, se usa como replyTo para que las
- *  respuestas le lleguen directo a él aunque el envío se centralice. */
-function notificarTicket(o, ticket) {
+/* ======================================================================
+   NOTIFICACIONES POR CORREO DEL CICLO DEL TICKET
+   - Al crearse: al gestor de la comuna del colegio y a quien lo levantó.
+   - Al quedar Ejecutado (el maestro lo resolvió): al gestor, con botones de
+     voto (OK / rechazar) que cierran o reabren el ticket sin entrar a la app.
+   - Al cerrarse (por voto, por validación en la app o por autovalidación):
+     a quien lo levantó.
+   MAIL_NOTIFICACIONES (propiedad de script) recibe copia de los tickets
+   nuevos y es el respaldo cuando la comuna no tiene gestor con correo.
+   ====================================================================== */
+
+function mailCentral() {
+  return PropertiesService.getScriptProperties().getProperty('MAIL_NOTIFICACIONES') || '';
+}
+
+function contextoTicket(o) {
+  const estab = o.id_establecimiento ? buscar('ESTABLECIMIENTO', 'id_establecimiento', o.id_establecimiento) : null;
+  const comuna = estab && estab.id_comuna ? buscar('COMUNA', 'id_comuna', estab.id_comuna) : null;
+  const gestor = comuna && comuna.id_gestor ? buscar('USUARIO', 'id_usuario', comuna.id_gestor) : null;
+  const creador = o.id_usuario_levanta ? buscar('USUARIO', 'id_usuario', o.id_usuario_levanta) : null;
+  return { estab: estab, comuna: comuna, gestor: gestor, creador: creador };
+}
+
+/** Envía un correo a una lista de destinatarios (sin vacíos ni repetidos). Nunca lanza. */
+function enviarCorreo(para, asunto, cuerpo, opciones) {
   try {
-    const dest = PropertiesService.getScriptProperties().getProperty('MAIL_NOTIFICACIONES');
-    if (!dest) return;
-    const estab = o.id_establecimiento ? buscar('ESTABLECIMIENTO', 'id_establecimiento', o.id_establecimiento) : null;
-    const usuario = o.id_usuario_levanta ? buscar('USUARIO', 'id_usuario', o.id_usuario_levanta) : null;
-    const asunto = (o.es_emergencia ? 'EMERGENCIA ' : 'Nuevo ticket ') + ticket +
-      (estab ? ' · ' + estab.nombre : '');
-    const cuerpo = 'Ticket: ' + ticket +
-      '\nEstablecimiento: ' + (estab ? estab.nombre : (o.id_establecimiento || 'no informado')) +
-      (o.es_emergencia ? '\nTipo de emergencia: ' + o.tipo_emergencia +
-        '\nContinuidad de clases: ' + (o.continuidad_clases || 'no informado') : '') +
-      '\nPrioridad: ' + (o.prioridad || 'Por evaluar') +
-      '\nDescripcion: ' + (o.descripcion || '') +
-      '\nIngresado por: ' + (usuario ? usuario.nombre : (o.id_usuario_levanta || 'no informado'));
-    const opciones = {};
-    if (usuario && usuario.correo) opciones.replyTo = usuario.correo;
-    MailApp.sendEmail(dest, asunto, cuerpo, opciones);
-  } catch (e) { console.warn('notificacion email fallo: ' + e); }
+    const vistos = {};
+    const lista = (para || []).map(x => String(x || '').trim()).filter(x => x && !vistos[x.toLowerCase()] && (vistos[x.toLowerCase()] = true));
+    if (!lista.length) return false;
+    const op = opciones || {};
+    if (op.cc) {
+      const cc = String(op.cc).split(',').map(x => x.trim()).filter(x => x && !vistos[x.toLowerCase()]);
+      if (cc.length) op.cc = cc.join(','); else delete op.cc;
+    }
+    MailApp.sendEmail(lista.join(','), asunto, cuerpo, op);
+    return true;
+  } catch (e) { console.warn('correo fallo (' + asunto + '): ' + e); return false; }
+}
+
+function escHtml(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function detalleTicket(o, ctx) {
+  return 'Ticket: ' + o.ticket +
+    '\nComuna: ' + (ctx.comuna ? ctx.comuna.nombre : 'no informada') +
+    '\nEstablecimiento: ' + (ctx.estab ? ctx.estab.nombre : (o.id_establecimiento || 'no informado')) +
+    (o.es_emergencia === 'SI' || o.es_emergencia === true ? '\nTipo de emergencia: ' + (o.tipo_emergencia || '') +
+      '\nContinuidad de clases: ' + (o.continuidad_clases || 'no informado') : '') +
+    '\nPrioridad: ' + (o.prioridad || 'Por evaluar') +
+    '\nDescripcion: ' + (o.descripcion || '') +
+    '\nIngresado por: ' + (ctx.creador ? ctx.creador.nombre : (o.id_usuario_levanta || 'no informado'));
+}
+
+/** Ticket nuevo: al gestor de la comuna y a quien lo levantó (copia a MAIL_NOTIFICACIONES). */
+function notificarTicket(o, ticket) {
+  const obs = Object.assign({}, o, { ticket: ticket, es_emergencia: o.es_emergencia ? 'SI' : '' });
+  const ctx = contextoTicket(obs);
+  const central = mailCentral();
+  const para = [ctx.gestor && ctx.gestor.correo, ctx.creador && ctx.creador.correo];
+  const asunto = (obs.es_emergencia ? 'EMERGENCIA ' : 'Nuevo ticket ') + ticket + (ctx.estab ? ' · ' + ctx.estab.nombre : '');
+  const cuerpo = (ctx.gestor ? 'Gestor de la comuna: ' + ctx.gestor.nombre + '\n\n' : 'La comuna no tiene gestor asignado.\n\n') +
+    detalleTicket(obs, ctx);
+  const opciones = {};
+  if (ctx.creador && ctx.creador.correo) opciones.replyTo = ctx.creador.correo;
+  if (!enviarCorreo(para, asunto, cuerpo, Object.assign({ cc: central }, opciones))) {
+    enviarCorreo([central], asunto, cuerpo, opciones);
+  }
+}
+
+function firmaVoto(ticket, idSubsanacion, idGestor) {
+  const p = PropertiesService.getScriptProperties();
+  let secreto = p.getProperty('VOTO_SECRET');
+  if (!secreto) { secreto = Utilities.getUuid() + Utilities.getUuid(); p.setProperty('VOTO_SECRET', secreto); }
+  const firma = Utilities.computeHmacSha256Signature(ticket + '|' + idSubsanacion + '|' + idGestor, secreto);
+  return Utilities.base64EncodeWebSafe(firma).replace(/=+$/, '');
+}
+
+function urlVoto(ticket, idSubsanacion, idGestor, voto) {
+  const base = PropertiesService.getScriptProperties().getProperty('URL_WEBAPP') || ScriptApp.getService().getUrl();
+  return base + '?voto=' + voto + '&t=' + encodeURIComponent(ticket) + '&s=' + encodeURIComponent(idSubsanacion) +
+    '&g=' + encodeURIComponent(idGestor) + '&k=' + firmaVoto(ticket, idSubsanacion, idGestor);
+}
+
+/** El maestro dejó el ticket Ejecutado: se pide al gestor de la comuna el OK por voto. */
+function solicitarVotoCierre(o, s) {
+  const ctx = contextoTicket(o);
+  const idGestor = ctx.gestor ? ctx.gestor.id_usuario : '';
+  const para = [(ctx.gestor && ctx.gestor.correo) || mailCentral()];
+  const ejecutor = s.id_usuario_ejecuta ? buscar('USUARIO', 'id_usuario', s.id_usuario_ejecuta) : null;
+  const asunto = 'Dar el OK al cierre del ticket ' + o.ticket + (ctx.estab ? ' · ' + ctx.estab.nombre : '');
+  const okUrl = urlVoto(o.ticket, s.id_subsanacion, idGestor, 'ok');
+  const noUrl = urlVoto(o.ticket, s.id_subsanacion, idGestor, 'rechazar');
+  const trabajo = 'Trabajo realizado: ' + (s.detalle_trabajo || 'sin detalle') +
+    '\nEjecutado por: ' + (ejecutor ? ejecutor.nombre : (s.id_usuario_ejecuta || 'no informado'));
+  const cuerpo = detalleTicket(o, ctx) + '\n\n' + trabajo +
+    '\n\nDar el OK (cerrar el ticket): ' + okUrl + '\nRechazar (reabrir el ticket): ' + noUrl;
+  const boton = (url, texto, color) => '<a href="' + url + '" style="display:inline-block;padding:10px 18px;margin:0 8px 8px 0;border-radius:6px;background:' +
+    color + ';color:#fff;text-decoration:none;font-weight:bold">' + texto + '</a>';
+  const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:600px">' +
+    '<p>El ticket <b>' + escHtml(o.ticket) + '</b> fue marcado como resuelto y espera tu OK para cerrarse.</p>' +
+    '<pre style="font-family:Arial,sans-serif;background:#f8fafc;padding:10px;border-radius:6px;white-space:pre-wrap">' +
+    escHtml(detalleTicket(o, ctx) + '\n\n' + trabajo) + '</pre>' +
+    boton(okUrl, '✅ Dar el OK y cerrar', '#16a34a') + boton(noUrl, '↩️ Rechazar y reabrir', '#dc2626') +
+    '<p style="color:#64748b;font-size:12px">Al presionar un botón se te pedirá confirmar antes de aplicar el voto.</p></div>';
+  enviarCorreo(para, asunto, cuerpo, { htmlBody: htmlBody });
+}
+
+/** El ticket quedó Cerrado: se avisa a quien lo levantó. */
+function notificarCierre(o) {
+  const ctx = contextoTicket(o);
+  if (!ctx.creador || !ctx.creador.correo) return;
+  const asunto = 'Ticket cerrado: ' + o.ticket + (ctx.estab ? ' · ' + ctx.estab.nombre : '');
+  enviarCorreo([ctx.creador.correo], asunto,
+    'Hola ' + ctx.creador.nombre + ',\n\nEl ticket que levantaste fue resuelto y cerrado.\n\n' + detalleTicket(o, ctx));
+}
+
+/** Enlace de voto del correo al gestor. Sin confirmar=1 solo muestra la pregunta: así un
+ *  antivirus que "abre" los enlaces del correo para revisarlos no vota por error. */
+function votarCierre(p) {
+  const pagina = (titulo, mensaje, extra) => HtmlService.createHtmlOutput(
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:40px auto;padding:0 16px">' +
+    '<h2>' + escHtml(titulo) + '</h2><p>' + mensaje + '</p>' + (extra || '') + '</div>')
+    .setTitle('LevantApp').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  const voto = p.voto === 'ok' || p.voto === 'rechazar' ? p.voto : '';
+  const idGestor = p.g || '';
+  if (!voto || !p.t || !p.s || p.k !== firmaVoto(p.t, p.s, idGestor)) {
+    return pagina('Enlace no válido', 'El enlace está incompleto o fue modificado.');
+  }
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return pagina('Servidor ocupado', 'Vuelve a intentarlo en unos segundos.');
+  try {
+    const o = buscar('OBSERVACION', 'ticket', p.t);
+    const s = buscar('SUBSANACION', 'id_subsanacion', p.s);
+    if (!o || !s || s.ticket !== o.ticket) return pagina('Ticket no encontrado', 'No se encontró el ticket ' + escHtml(p.t) + '.');
+    if (o.estado !== 'Ejecutado') {
+      return pagina('Ticket ' + o.ticket, 'Este ticket ya fue revisado. Estado actual: <b>' + escHtml(o.estado) + '</b>.');
+    }
+    const accion = voto === 'ok' ? 'dar el OK y cerrar' : 'rechazar y reabrir';
+    if (p.confirmar !== '1') {
+      const confirmar = urlVoto(o.ticket, s.id_subsanacion, idGestor, voto) + '&confirmar=1';
+      return pagina('Ticket ' + o.ticket, '¿Confirmas ' + accion + ' este ticket?',
+        '<a href="' + confirmar + '" target="_top" style="display:inline-block;padding:10px 18px;border-radius:6px;background:' +
+        (voto === 'ok' ? '#16a34a' : '#dc2626') + ';color:#fff;text-decoration:none;font-weight:bold">Confirmar</a>');
+    }
+    o.estado = voto === 'ok' ? 'Cerrado' : 'Reabierto';
+    o.actualizado = new Date();
+    upsert('OBSERVACION', 'ticket', o.ticket, o);
+    upsert('VALIDACION', 'id_local', 'VOTO_' + s.id_subsanacion, {
+      id_local: 'VOTO_' + s.id_subsanacion, id_local_obs: o.id_local, id_subsanacion: s.id_subsanacion,
+      ticket: o.ticket, conforme: voto === 'ok' ? 'SI' : 'NO', id_usuario_valida: idGestor || 'voto-correo', fecha: new Date()
+    });
+    if (voto === 'ok') notificarCierre(o);
+    return pagina('¡Listo!', voto === 'ok'
+      ? 'El ticket <b>' + escHtml(o.ticket) + '</b> quedó cerrado y se avisó a quien lo levantó.'
+      : 'El ticket <b>' + escHtml(o.ticket) + '</b> quedó reabierto y vuelve a la bandeja del maestro.');
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ======================================================================
@@ -759,6 +903,7 @@ function validarSubsanacion(d) {
   if (!permisoInfraestructura(v.id_usuario_valida)) return {status:'error', message:'sin permiso para validar'};
   const o = buscar('OBSERVACION', 'id_local', v.id_local_obs) || buscar('OBSERVACION', 'ticket', v.ticket);
   if (!o) return {status:'error', message:'ticket no existe'};
+  const yaValidada = !!buscar('VALIDACION', 'id_local', v.id_local);
   o.estado = v.conforme ? 'Cerrado' : 'Reabierto';
   o.actualizado = new Date();
   upsert('OBSERVACION', 'ticket', o.ticket, o);
@@ -767,6 +912,7 @@ function validarSubsanacion(d) {
     ticket: o.ticket, conforme: v.conforme ? 'SI' : 'NO', id_usuario_valida: v.id_usuario_valida,
     fecha: v.fecha || new Date()
   });
+  if (v.conforme && !yaValidada) notificarCierre(o);
   return {status:'ok'};
 }
 
@@ -846,6 +992,19 @@ function asignacionGuardar(d) {
   });
   // Solo se notifica al asignar/actualizar una ruta activa, no al desasignar (activa:false).
   if (a.activa !== false) notificarRuta(a);
+  return {status:'ok'};
+}
+
+/** Define (o quita, con id_gestor vacío) el gestor responsable de una comuna: es quien
+ *  recibe el aviso de cada ticket nuevo de sus colegios y el voto de OK para cerrarlos. */
+function comunaGestor(d) {
+  const c = d.data || {};
+  if (!permisoCoordinador(c.id_usuario_actor)) return {status:'error', message:'sin permiso para asignar gestores'};
+  const comuna = buscar('COMUNA', 'id_comuna', c.id_comuna);
+  if (!comuna) return {status:'error', message:'comuna no existe'};
+  if (c.id_gestor && !buscar('USUARIO', 'id_usuario', c.id_gestor)) return {status:'error', message:'usuario no existe'};
+  comuna.id_gestor = c.id_gestor || '';
+  upsert('COMUNA', 'id_comuna', c.id_comuna, comuna);
   return {status:'ok'};
 }
 

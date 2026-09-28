@@ -233,9 +233,9 @@ Alta o edición de un usuario (login). Exclusivo de Infraestructura — el backe
 `clave` viaja vacía cuando es una edición sin cambio de contraseña — el backend NO debe
 sobrescribir la clave existente en ese caso. `perfil` ∈ `Director | Maestro |
 Infraestructura | Bodega | Coordinador`. `correo` se agregó **al final** de
-`SCHEMA.USUARIO` (mismo motivo de siempre — no desalinear filas existentes); hoy se usa
-solo como `replyTo` en la notificación de tickets nuevos (ver
-`notificarTicket`/`MAIL_NOTIFICACIONES` más abajo), no para enviar login/clave por correo.
+`SCHEMA.USUARIO` (mismo motivo de siempre — no desalinear filas existentes). Es el destino
+de los correos del ciclo del ticket y de la ruta asignada (ver "Correos del ciclo del
+ticket" más abajo); nunca se usa para enviar login/clave por correo.
 
 ### `admin_catalogo`
 Alta de un material, herramienta o empresa desde la UI de Administración. También
@@ -308,25 +308,49 @@ registros nuevos automáticamente ni guarda nada sin que el usuario revise y con
 
 ---
 
-## Notificación por correo al ingresar un ticket
+## Correos del ciclo del ticket (creación, voto de cierre, cierre)
 
-`guardarObservacion` llama a `notificarTicket(o, ticket)` cada vez que se crea un ticket
-nuevo (`!prev`, o sea que no existía antes por `id_local`) — tanto levantamientos
-normales como emergencias. Reemplaza al antiguo `alertaEmergencia`, que solo cubría
-emergencias y usaba la propiedad `MAIL_EMERGENCIA`.
+Todos usan el `correo` de la ficha de cada usuario (`USUARIO.correo`). Quien no tenga
+correo cargado simplemente no recibe el aviso; el resto del flujo sigue igual.
 
-**Requiere configurar el destino** en el editor de Apps Script: **Extensiones →
-Propiedades del proyecto → Propiedades del script → Agregar propiedad del script**,
-nombre `MAIL_NOTIFICACIONES`, valor `rodrigo.bascunan@sleppuelche.gob.cl`. Sin esta
-propiedad configurada, `notificarTicket` no hace nada (falla silenciosa, igual que antes
-con `MAIL_EMERGENCIA`) — el resto de la creación del ticket sigue funcionando normal.
+**Gestor por comuna.** `SCHEMA.COMUNA` suma `id_gestor` **al final** (no desalinea filas
+existentes). Se define en **Gestión → Asignaciones → Gestor por comuna** con la acción:
+```json
+{"action":"comuna_gestor", "data":{
+  "id_local":"GCOM_xxx", "id_comuna":"C07", "id_gestor":"USR_2", "id_usuario_actor":"USR_1"
+}}
+```
+Requiere `permisoCoordinador` (Coordinador o Infraestructura). `id_gestor` vacío quita el
+gestor. `catalogos` ya devuelve `id_gestor` dentro de cada comuna.
 
-Por ahora el destino está centralizado en una sola casilla (todos los tickets, de
-cualquier colegio o usuario, llegan al mismo correo). Si el usuario que levantó el ticket
-tiene `correo` cargado en su ficha (`USUARIO.correo`), se usa como `replyTo` del correo,
-para que una respuesta directa le llegue a esa persona aunque el envío esté centralizado.
-El cuerpo incluye: ticket, establecimiento, tipo de emergencia y continuidad de clases
-(solo si `es_emergencia`), prioridad, descripción y quién lo ingresó.
+1. **Ticket nuevo** (`guardarObservacion`, solo la primera vez por `id_local`):
+   `notificarTicket` envía al **gestor de la comuna** del colegio y a **quien lo
+   levantó**, con copia a la propiedad de script `MAIL_NOTIFICACIONES`. Si ninguno de
+   los dos tiene correo, va solo a `MAIL_NOTIFICACIONES`. Reemplaza al envío anterior,
+   que iba únicamente a la casilla central.
+2. **Ticket resuelto por el maestro** (`guardarSubsanacion` con `resuelto` y sin
+   `validado`, estado → `Ejecutado`): `solicitarVotoCierre` envía al gestor de la comuna
+   (o a `MAIL_NOTIFICACIONES` si la comuna no tiene gestor con correo) un correo con dos
+   botones: **✅ Dar el OK y cerrar** / **↩️ Rechazar y reabrir**. Se envía una sola vez
+   por subsanación (los reintentos de red no reenvían).
+3. **Voto** (`doGet` con `?voto=ok|rechazar&t=<ticket>&s=<id_subsanacion>&g=<id_gestor>&k=<firma>`):
+   la firma `k` es un HMAC-SHA256 de `ticket|id_subsanacion|id_gestor` con el secreto
+   `VOTO_SECRET` (propiedad de script que se crea sola la primera vez). Abrir el enlace
+   **solo muestra una página de confirmación**; el voto se aplica al presionar
+   "Confirmar" (`&confirmar=1`), para que un antivirus que revisa los enlaces del correo
+   no vote solo. Si el ticket ya no está en `Ejecutado`, la página avisa que ya fue
+   revisado y no cambia nada. El voto OK deja el ticket `Cerrado`, el rechazo lo deja
+   `Reabierto`; ambos escriben una fila en `VALIDACION` (`id_local` = `VOTO_<id_subsanacion>`,
+   `id_usuario_valida` = gestor).
+4. **Ticket cerrado**: `notificarCierre` avisa a **quien lo levantó**. Se dispara con el
+   voto OK, con `validar_subsanacion` conforme desde la app (solo la primera vez por
+   `id_local`) y cuando la subsanación ya viene autovalidada (Infraestructura cerrando su
+   propio trabajo).
+
+Propiedades de script que usa este flujo: `MAIL_NOTIFICACIONES` (copia y respaldo),
+`VOTO_SECRET` (automática) y, opcional, `URL_WEBAPP` si se quiere forzar la URL base de
+los enlaces de voto (por defecto se usa `ScriptApp.getService().getUrl()`, la URL `/exec`
+de la implementación vigente).
 
 ---
 
