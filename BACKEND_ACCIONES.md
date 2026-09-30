@@ -400,6 +400,36 @@ avisarle: la asignación se guarda igual, pero no sale correo (falla silenciosa)
 desasignar (`activa:false`) no se notifica. El `replyTo` queda en el correo del
 Coordinador que hizo la asignación (`id_usuario_coordinador`), si tiene uno cargado.
 
+### `rutas_importar`
+Carga el historial de rutas a terreno desde la planilla de planificación (Gestión → 🗺️ Rutas).
+El cliente lee el Excel con SheetJS y manda una fila por maestro/colegio/día:
+```json
+{"action":"rutas_importar", "id_usuario":"USR_1", "rutas":[{
+  "id_ruta":"RUTA_1a2b3c4d5e6f7a8b", "fecha":"2026-06-23", "gestor":"Rodrigo Bascuñán",
+  "maestro":"Juan Barra", "id_usuario_maestro":"", "establecimiento":"Mariano Puga",
+  "id_establecimiento":"", "vehiculo":"JAC", "trabajo":"Planta de tratamiento y mantenciones varias",
+  "origen":"planilla: planificacion_rutas_sept_2026.xlsx"}]}
+```
+Requiere `permisoCoordinador`. Nueva hoja `RUTA` (se crea sola). `id_ruta` es un hash de
+`fecha|maestro|establecimiento`, así que reimportar la misma planilla **actualiza** esas filas
+en vez de duplicarlas; responde `{"status":"ok","nuevas":N,"actualizadas":M}`. Los nombres se
+guardan tal cual vienen; `id_usuario_maestro`/`id_establecimiento` solo se llenan si el nombre
+coincide con un usuario o un colegio del catálogo. El cliente limpia restos de correos
+pegados en la planilla (`[... | Outlook]`) y corrige filas corridas (trabajo escrito en la
+columna vehículo).
+
+### `rutas_pull`
+`{"action":"rutas_pull","id_usuario":"USR_1"}` → `{"status":"ok","rutas":[...]}`. Requiere
+`permisoCoordinador`; alimenta los filtros, el resumen y el detalle por día de la pantalla Rutas.
+
+### Galería de fotos (Gestión → 📷 Fotos)
+Solo visible para Infraestructura y Coordinador. No usa acciones nuevas: arma la galería con
+lo que ya baja `pull` (fotos de antes y después de cada ticket). Las URL de Drive
+(`.../file/d/ID/view`) no se pueden mostrar como imagen, así que el cliente pide la miniatura
+del archivo (`drive.google.com/thumbnail?id=ID`), que funciona porque `subirFoto` comparte
+cada foto por enlace. El mismo arreglo hace visibles las fotos subidas desde otros equipos
+en todo el resto de la app.
+
 ### Cambios en acciones existentes
 - **`login`**: la respuesta ahora incluye `establecimientos_asignados` (arreglo de
   `id_establecimiento`), calculado desde `ASIGNACION` en el momento del login.
@@ -408,6 +438,10 @@ Coordinador que hizo la asignación (`id_usuario_coordinador`), si tiene uno car
   real: sin `usuarios[]`, el selector "Entregar a (gestor de mantenimiento)" de Bodega →
   Entregar quedaba siempre en "Sin usuarios en el catálogo", inutilizando la entrega de
   materiales/herramientas para ese perfil.
+- **`pull`**: ahora recibe `id_usuario` y toma el perfil desde la planilla `USUARIO`
+  (no el que declara el cliente). Un **Director solo recibe los tickets que él mismo
+  levantó** (`id_usuario_levanta`), ya no todos los de su establecimiento; sin `id_usuario`
+  no recibe ninguno.
 - **`pull`**: si `d.perfil==='Maestro'` y llega `d.id_establecimientos` (arreglo, no
   vacío), filtra las observaciones a esos establecimientos — igual que ya hacía para
   `Director` con `d.id_establecimiento` (singular). También suma `materiales_usados` a

@@ -858,6 +858,8 @@
         <button class="subtab-btn" data-sp="ges-reportes" onclick="showSub('gestion','ges-reportes')">📊 Reportería</button>
         <button class="subtab-btn" data-sp="ges-analitica" onclick="showSub('gestion','ges-analitica')">🤖 Analítica IA</button>
         <button class="subtab-btn" data-sp="ges-asignaciones" onclick="showSub('gestion','ges-asignaciones')">🧭 Asignaciones</button>
+        <button class="subtab-btn" data-sp="ges-rutas" onclick="showSub('gestion','ges-rutas')">🗺️ Rutas</button>
+        <button class="subtab-btn" data-sp="ges-fotos" onclick="showSub('gestion','ges-fotos')">📷 Fotos</button>
       </div>
 
       <!-- Bandeja de observaciones (toda la red) -->
@@ -1039,6 +1041,48 @@
           <div id="asig-lista"></div>
         </div>
       </div>
+
+      <!-- Rutas a terreno (planilla de planificación): Infraestructura y Coordinador -->
+      <div class="subpanel" id="ges-rutas">
+        <div class="card mb-3">
+          <div class="card-title mb-3">📥 Importar planificación de rutas</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Sube la planilla Excel de planificación (columnas Fecha, Gestor, Maestro, Establecimiento,
+            Vehículo y Trabajo/Observación). Volver a subir el mismo archivo actualiza esas rutas, no las duplica.</p>
+          <input type="file" id="rutas-file" accept=".xlsx,.xls,.csv" onchange="leerPlanillaRutas(this.files[0]); this.value=''">
+          <div id="rutas-preview" class="mt-3"></div>
+        </div>
+        <div class="card mb-3">
+          <div class="grid-2 mb-3">
+            <div><label>Desde</label><input type="date" id="rutas-desde" onchange="pintarRutas()"></div>
+            <div><label>Hasta</label><input type="date" id="rutas-hasta" onchange="pintarRutas()"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Maestro</label><select id="rutas-maestro" onchange="pintarRutas()"></select></div>
+            <div><label>Gestor</label><select id="rutas-gestor" onchange="pintarRutas()"></select></div>
+          </div>
+        </div>
+        <div class="kpi-grid" id="rutas-kpis"></div>
+        <div class="card mb-3"><div class="card-title mb-3">Resumen</div><div id="rutas-resumen"></div></div>
+        <div class="card"><div class="card-title mb-3">Detalle por día</div><div id="rutas-lista"></div></div>
+      </div>
+
+      <!-- Galería consolidada de fotos: solo Infraestructura y Coordinador -->
+      <div class="subpanel" id="ges-fotos">
+        <div class="card mb-3">
+          <div class="card-title mb-3">📷 Fotos de todos los tickets</div>
+          <div class="grid-2 mb-3">
+            <div><label>Comuna</label><select id="fotos-comuna" onchange="poblarSelectColegios('fotos-estab', this.value, '', {placeholderTodos:'Todos los colegios'}); pintarGaleria()"></select></div>
+            <div><label>Colegio</label><select id="fotos-estab" onchange="pintarGaleria()"></select></div>
+          </div>
+          <select id="fotos-estado" onchange="pintarGaleria()">
+            <option value="">Todos los estados</option>
+            <option value="pendientes">Pendientes</option>
+            <option value="realizados">Realizados</option>
+          </select>
+        </div>
+        <div id="fotos-lista"></div>
+      </div>
     </div>
 
     <!-- ---------- SEGUIMIENTO (Módulo 7, exclusivo Infraestructura) ---------- -->
@@ -1128,7 +1172,7 @@ const LS = {
   obs:'lev_obs', sub:'lev_sub', cola:'lev_cola', tema:'theme',
   inv:'lev_inv', bodcola:'lev_bodcola', ocs:'lev_ocs',
   validcola:'lev_validcola', admincola:'lev_admincola',
-  asig:'lev_asig', asigcola:'lev_asigcola', cch:'lev_cch'
+  asig:'lev_asig', asigcola:'lev_asigcola', cch:'lev_cch', rutas:'lev_rutas'
 };
 const leerLS = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch(e) { return def; } };
 
@@ -1171,6 +1215,8 @@ let iaData = null, iaCols = null, iaFiltros = {}, iaCharts = {c1:null, c2:null};
 // ---- Módulo 7 · Coordinación y Seguimiento ----
 let asignaciones = leerLS(LS.asig, []);   // {id_local, id_usuario, id_establecimiento, activa}
 let asigCola     = leerLS(LS.asigcola, []);
+let rutas        = leerLS(LS.rutas, []);   // historial de rutas a terreno (planilla de planificación)
+let rutasPreview  = [];                   // filas leídas del Excel, antes de cargarlas
 let segCharts    = {};                    // instancias Chart.js del tablero de Seguimiento
 
 // ==================== UTILIDADES ====================
@@ -1213,9 +1259,15 @@ function idbDel(k){ if(!k) return Promise.resolve(); return idb().then(db=>new P
   tx.oncomplete=res; tx.onerror=res; })); }
 
 const _urlCache = new Map();
+// Drive devuelve enlaces de vista (…/file/d/ID/view), que no sirven como <img>: se pide la
+// miniatura del archivo, que sí es una imagen (requiere que el archivo esté compartido por enlace).
+function urlImagenDrive(u){
+  const m = String(u).match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{10,})/);
+  return m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600' : u;
+}
 function photoURL(id){
   if(!id) return Promise.resolve(null);
-  if(/^https?:/.test(id)) return Promise.resolve(id);          // ya subida a Drive
+  if(/^https?:/.test(id)) return Promise.resolve(urlImagenDrive(id));   // ya subida a Drive
   if(_urlCache.has(id)) return Promise.resolve(_urlCache.get(id));
   return idbGet(id).then(b=>{ if(!b) return null; const u=URL.createObjectURL(b); _urlCache.set(id,u); return u; });
 }
@@ -1277,10 +1329,11 @@ function entrarApp() {
   document.getElementById('tab-bodega').style.display = (p==='Infraestructura'||p==='Bodega') ? '' : 'none';
   // Caja Chica: mismo acceso que Bodega, porque suma stock igual que una recepción
   document.getElementById('tab-cajachica').style.display = (p==='Infraestructura'||p==='Bodega') ? '' : 'none';
-  // Gestión y control (Módulo 5): Infraestructura, y Coordinador solo ve el subtab Asignaciones
+  // Gestión y control (Módulo 5): Infraestructura, y Coordinador solo ve Asignaciones, Rutas y Fotos
   document.getElementById('tab-gestion').style.display = (p==='Infraestructura'||p==='Coordinador') ? '' : 'none';
-  document.querySelectorAll('#gestion-subtabs .subtab-btn:not([data-sp="ges-asignaciones"])')
-    .forEach(b => b.style.display = p==='Coordinador' ? 'none' : '');
+  const SUBTABS_COORDINADOR = ['ges-asignaciones','ges-rutas','ges-fotos'];
+  document.querySelectorAll('#gestion-subtabs .subtab-btn')
+    .forEach(b => b.style.display = p==='Coordinador' && !SUBTABS_COORDINADOR.includes(b.dataset.sp) ? 'none' : '');
   // Seguimiento (Módulo 7): tablero de control, exclusivo Infraestructura
   document.getElementById('tab-seguimiento').style.display = p==='Infraestructura' ? '' : 'none';
   if (p!=='Bodega' && p!=='Coordinador') iniciarLevantamiento();
@@ -1722,6 +1775,8 @@ async function guardarEmergencia() {
 // toda la app (defensa en profundidad además del filtro que ya aplica el servidor en pull()).
 // Sin asignaciones activas, no restringe nada (visibilidad de red como hasta ahora).
 function scopedObs() {
+  // El Director solo ve los tickets que él levantó (aunque el equipo guarde otros de sesiones anteriores).
+  if (sesion.perfil === 'Director') return obs.filter(o=>o.id_usuario_levanta===sesion.id_usuario);
   if (sesion.perfil === 'Maestro' && sesion.establecimientos_asignados?.length) {
     const set = {}; sesion.establecimientos_asignados.forEach(id=>set[id]=1);
     return obs.filter(o=>set[o.id_establecimiento]);
@@ -2120,7 +2175,7 @@ async function sincronizarTodo(silencioso) {
   // Infraestructura ve toda la red; el Director su propio establecimiento; el Maestro los
   // colegios que el Coordinador le asignó (si no tiene ninguno, también ve toda la red).
   const soloMiEstab = sesion.perfil !== 'Infraestructura' ? sesion.id_establecimiento : undefined;
-  const r = await api({action:'pull', perfil:sesion.perfil, id_establecimiento:soloMiEstab,
+  const r = await api({action:'pull', id_usuario:sesion.id_usuario, perfil:sesion.perfil, id_establecimiento:soloMiEstab,
                         id_establecimientos: sesion.establecimientos_asignados||[]});
   if (r && r.status==='ok') fusionar(r);
 
@@ -2159,6 +2214,7 @@ async function sincronizarTodo(silencioso) {
       guardar(LS.asig, asignaciones);
       if (cat) { cat.usuarios_asignables = ra.usuarios||[]; guardar(LS.cat, cat); }
     }
+    await bajarRutas();
   }
 
   sincronizando = false;
@@ -2183,6 +2239,7 @@ function fusionar(r) {
         id_establecimiento: srv.id_establecimiento, id_recinto: srv.id_recinto,
         id_especifico: srv.id_especifico, cantidad: srv.cantidad || 1, descripcion: srv.descripcion,
         foto_antes: srv.foto_antes_url || '', prioridad: srv.prioridad, estado: srv.estado,
+        fotos_antes: srv.fotos_antes_urls ? String(srv.fotos_antes_urls).split(';').filter(Boolean) : [],
         fecha_registro: srv.fecha_registro, id_usuario_levanta: srv.id_usuario_levanta,
         es_emergencia: srv.es_emergencia === 'SI', tipo_emergencia: srv.tipo_emergencia,
         justificacion: srv.justificacion, synced:true
@@ -2217,6 +2274,7 @@ function fusionar(r) {
         id_local_obs: (obs.find(o=>o.ticket===srv.ticket)||{}).id_local || '',
         ticket: srv.ticket, id_accion: srv.id_accion, detalle_trabajo: srv.detalle_trabajo,
         foto_despues: srv.foto_despues_url || '', fecha_ejecucion: srv.fecha_ejecucion,
+        fotos_despues: srv.fotos_despues_urls ? String(srv.fotos_despues_urls).split(';').filter(Boolean) : [],
         id_usuario_ejecuta: srv.id_usuario_ejecuta, resuelto: srv.resuelto === 'SI',
         validado: srv.validado === 'SI', materiales: materialesSrv, horas: +srv.horas || 0,
         synced:true
@@ -2241,7 +2299,7 @@ function showSub(grupo, id) {
   const map = {
     bodega: ['bod-inventario','bod-entregar','bod-custodia','bod-recepcion'],
     cajachica: ['cch-registrar','cch-reporte'],
-    gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-reportes','ges-analitica','ges-asignaciones'],
+    gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-reportes','ges-analitica','ges-asignaciones','ges-rutas','ges-fotos'],
     admin: ['adm-usuarios','adm-materiales','adm-herramientas','adm-empresas','adm-establecimientos']
   }[grupo];
   const barId = grupo==='admin' ? 'admin-subtabs' : grupo+'-subtabs';
@@ -2258,6 +2316,8 @@ function showSub(grupo, id) {
     'adm-establecimientos': ()=>pintarAdminCatalogo('establecimiento'),
     'ges-reportes': pintarResumenReporte,
     'ges-asignaciones': pintarAsignaciones,
+    'ges-rutas': pintarRutas,
+    'ges-fotos': pintarGaleria,
     'cch-registrar': ()=>{ cchDetectados=[]; pintarCchDetectados(); const s=document.getElementById('cch-ia-status'); if(s) s.textContent=''; },
     'cch-reporte': pintarReporteCajaChica
   };
@@ -3632,6 +3692,197 @@ async function quitarAsignacion(idLocal) {
   pintarAsignaciones();
 }
 
+// ---- Rutas a terreno: importación de la planilla de planificación y consulta ----
+function fechaISO(v) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10);   // serial de Excel
+  const t = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = t.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+  const d = new Date(t);   // fecha del servidor (Sheets la devuelve con hora): se lee en hora local
+  if (isNaN(d)) return '';
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+const fechaCorta = iso => iso ? iso.slice(8, 10) + '-' + iso.slice(5, 7) + '-' + iso.slice(0, 4) : '';
+// Quita restos de correos pegados en la planilla, ej. "[RE: Progra...io de 2026 | Outlook]"
+const limpiarCelda = v => String(v == null ? '' : v).replace(/\s*\[[^\]]*outlook[^\]]*\]/gi, '').replace(/\s+/g, ' ').trim();
+function idRuta(fecha, maestro, estab) {
+  const txt = fecha + '|' + normTxt(maestro) + '|' + normTxt(estab);
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (let i = 0; i < txt.length; i++) {
+    h1 = Math.imul(h1 ^ txt.charCodeAt(i), 16777619) >>> 0;
+    h2 = Math.imul(h2 ^ txt.charCodeAt(i), 2246822519) >>> 0;
+  }
+  return 'RUTA_' + h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+}
+function matchUsuarioPorNombre(nombre) {
+  const n = normTxt(nombre);
+  return n ? (cat?.usuarios || []).find(u => normTxt(u.nombre) === n) || null : null;
+}
+function matchEstabPorNombre(nombre) {
+  const n = normTxt(String(nombre).replace(/\((am|pm)\)/gi, ''));
+  if (!n) return null;
+  const lista = cat?.establecimientos || [];
+  const exacto = lista.find(e => normTxt(e.nombre) === n);
+  if (exacto) return exacto;
+  const parciales = lista.filter(e => normTxt(e.nombre).includes(n) || n.includes(normTxt(e.nombre)));
+  return parciales.length === 1 ? parciales[0] : null;
+}
+async function leerPlanillaRutas(file) {
+  if (!file) return;
+  const cont = document.getElementById('rutas-preview');
+  if (typeof XLSX === 'undefined') { toast('⚠️ Sin conexión: no se pudo cargar el lector de Excel', 'err'); return; }
+  let wb;
+  try { wb = XLSX.read(await file.arrayBuffer(), {type: 'array'}); }
+  catch (e) { toast('⚠️ No se pudo leer el archivo', 'err'); return; }
+  const filas = [];
+  for (const nombreHoja of wb.SheetNames) {
+    const matriz = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], {header: 1, raw: true, defval: ''});
+    const iHdr = matriz.findIndex(r => r.some(c => normTxt(c) === 'fecha') && r.some(c => normTxt(c) === 'maestro'));
+    if (iHdr < 0) continue;
+    const hdr = matriz[iHdr].map(c => normTxt(c));
+    const col = n => hdr.findIndex(h => h === n || h.startsWith(n));
+    const c = {fecha: col('fecha'), gestor: col('gestor'), maestro: col('maestro'), estab: col('establecimiento'),
+               vehiculo: col('vehiculo'), trabajo: col('trabajo')};
+    matriz.slice(iHdr + 1).forEach(r => {
+      const fecha = fechaISO(r[c.fecha]);
+      const maestro = limpiarCelda(r[c.maestro]);
+      const establecimiento = limpiarCelda(r[c.estab]);
+      if (!fecha || !maestro || !establecimiento) return;
+      let vehiculo = c.vehiculo >= 0 ? limpiarCelda(r[c.vehiculo]) : '';
+      let trabajo = c.trabajo >= 0 ? limpiarCelda(r[c.trabajo]) : '';
+      if (!trabajo && vehiculo.length > 20) { trabajo = vehiculo; vehiculo = ''; }   // fila corrida una columna
+      const u = matchUsuarioPorNombre(maestro);
+      const e = matchEstabPorNombre(establecimiento);
+      filas.push({
+        id_ruta: idRuta(fecha, maestro, establecimiento), fecha, gestor: c.gestor >= 0 ? limpiarCelda(r[c.gestor]) : '',
+        maestro, id_usuario_maestro: u ? u.id_usuario : '', establecimiento, id_establecimiento: e ? e.id_establecimiento : '',
+        vehiculo, trabajo, origen: 'planilla: ' + file.name
+      });
+    });
+    break;
+  }
+  const vistos = {};
+  rutasPreview = filas.filter(f => !vistos[f.id_ruta] && (vistos[f.id_ruta] = true));
+  if (!rutasPreview.length) {
+    cont.innerHTML = '<p style="color:var(--danger);font-size:13px">No se encontraron rutas: la planilla debe tener columnas Fecha, Maestro y Establecimiento.</p>';
+    return;
+  }
+  const fechas = rutasPreview.map(f => f.fecha).sort();
+  const distintos = (campo, idCampo) => {
+    const m = {}; rutasPreview.forEach(f => { m[normTxt(f[campo])] = m[normTxt(f[campo])] || !!f[idCampo]; });
+    const k = Object.keys(m); return {total: k.length, reconocidos: k.filter(x => m[x]).length};
+  };
+  const ma = distintos('maestro', 'id_usuario_maestro'), co = distintos('establecimiento', 'id_establecimiento');
+  cont.innerHTML = `
+    <p style="font-size:13px;margin-bottom:6px"><b>${rutasPreview.length} rutas</b> del ${esc(fechaCorta(fechas[0]))} al ${esc(fechaCorta(fechas[fechas.length - 1]))}.</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+      ${ma.total} maestros (${ma.reconocidos} con usuario en la app) · ${co.total} colegios (${co.reconocidos} reconocidos en el catálogo).
+      Los nombres se guardan tal cual vienen; los no reconocidos igual quedan en el historial.</p>
+    <button class="btn btn-primary" id="rutas-cargar" onclick="cargarRutas()">⬆️ Cargar ${rutasPreview.length} rutas a la base de datos</button>`;
+}
+async function cargarRutas() {
+  if (!rutasPreview.length) return;
+  const btn = document.getElementById('rutas-cargar');
+  btn.disabled = true; btn.textContent = 'Cargando…';
+  const r = await api({action: 'rutas_importar', id_usuario: sesion.id_usuario, rutas: rutasPreview}, 120000);
+  if (!r || r.status !== 'ok') {
+    btn.disabled = false; btn.textContent = '⬆️ Reintentar carga';
+    toast('⚠️ ' + (r?.message || 'No se pudo cargar: revisa la conexión'), 'err');
+    return;
+  }
+  toast('✅ ' + r.nuevas + ' rutas nuevas, ' + r.actualizadas + ' actualizadas', 'ok');
+  rutasPreview = [];
+  document.getElementById('rutas-preview').innerHTML =
+    '<p style="font-size:13px;color:var(--ok)">✅ Carga lista: ' + r.nuevas + ' nuevas, ' + r.actualizadas + ' actualizadas.</p>';
+  await bajarRutas();
+  pintarRutas();
+}
+async function bajarRutas() {
+  if (sesion?.perfil !== 'Infraestructura' && sesion?.perfil !== 'Coordinador') return;
+  const r = await api({action: 'rutas_pull', id_usuario: sesion.id_usuario});
+  if (r && r.status === 'ok') { rutas = r.rutas || []; guardar(LS.rutas, rutas); }
+}
+function pintarRutas() {
+  const selM = document.getElementById('rutas-maestro'), selG = document.getElementById('rutas-gestor');
+  const opciones = (sel, campo, todos) => {
+    const actual = sel.value;
+    const valores = [...new Set(rutas.map(r => r[campo]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    sel.innerHTML = `<option value="">${todos}</option>` + valores.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if (valores.includes(actual)) sel.value = actual;
+  };
+  opciones(selM, 'maestro', 'Todos los maestros');
+  opciones(selG, 'gestor', 'Todos los gestores');
+  const desde = document.getElementById('rutas-desde').value, hasta = document.getElementById('rutas-hasta').value;
+  const lista = rutas.map(r => Object.assign({}, r, {fechaIso: fechaISO(r.fecha)})).filter(r =>
+    (!desde || r.fechaIso >= desde) && (!hasta || r.fechaIso <= hasta) &&
+    (!selM.value || r.maestro === selM.value) && (!selG.value || r.gestor === selG.value));
+  const nDistintos = campo => new Set(lista.map(r => normTxt(r[campo]))).size;
+  document.getElementById('rutas-kpis').innerHTML = [
+    [lista.length, 'Salidas'], [new Set(lista.map(r => r.fechaIso)).size, 'Días con salidas'],
+    [nDistintos('maestro'), 'Maestros'], [nDistintos('establecimiento'), 'Colegios']
+  ].map(([v, l]) => `<div class="kpi-card"><div class="kpi-val">${v}</div><div class="kpi-lbl">${l}</div></div>`).join('');
+  const ranking = (campo, titulo) => {
+    const c = {}; lista.forEach(r => { const k = r[campo] || '—'; c[k] = (c[k] || 0) + 1; });
+    const top = Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    return `<div><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">${titulo}</div>` +
+      top.map(([k, n]) => `<div style="font-size:12px;display:flex;justify-content:space-between;padding:2px 0"><span>${esc(k)}</span><b>${n}</b></div>`).join('') + '</div>';
+  };
+  document.getElementById('rutas-resumen').innerHTML = lista.length
+    ? `<div class="grid-2" style="gap:16px">${ranking('establecimiento', 'Colegios')}${ranking('maestro', 'Maestros')}${ranking('gestor', 'Gestores')}${ranking('vehiculo', 'Vehículos')}</div>`
+    : '<p style="color:var(--muted);font-size:12px">Sin datos.</p>';
+  const porDia = {};
+  lista.forEach(r => { (porDia[r.fechaIso] = porDia[r.fechaIso] || []).push(r); });
+  document.getElementById('rutas-lista').innerHTML = lista.length
+    ? Object.keys(porDia).sort().reverse().map(f => `
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">📅 ${esc(fechaCorta(f))} · ${porDia[f].length} salida(s)</div>
+        ${porDia[f].map(r => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+          <b>${esc(r.maestro)}</b> → ${esc(r.establecimiento)}${r.vehiculo ? ' · 🚙 ' + esc(r.vehiculo) : ''}
+          <div style="color:var(--muted)">${esc(r.trabajo || 'Sin detalle')}${r.gestor ? ' · Gestor: ' + esc(r.gestor) : ''}</div></div>`).join('')}
+      </div>`).join('')
+    : '<p style="color:var(--muted);font-size:12px">Aún no hay rutas cargadas. Importa la planilla de planificación arriba.</p>';
+}
+
+// ---- Galería consolidada de fotos (solo Infraestructura y Coordinador) ----
+function fotosDeTicket(o) {
+  const antes = (o.fotos_antes && o.fotos_antes.length ? o.fotos_antes : [o.foto_antes]).filter(Boolean);
+  const despues = [];
+  subs.filter(s => s.id_local_obs === o.id_local || (o.ticket && s.ticket === o.ticket)).forEach(s => {
+    (s.fotos_despues && s.fotos_despues.length ? s.fotos_despues : [s.foto_despues]).filter(Boolean).forEach(f => despues.push(f));
+  });
+  return {antes, despues};
+}
+function pintarGaleria() {
+  const c = document.getElementById('fotos-lista');
+  if (sesion?.perfil !== 'Infraestructura' && sesion?.perfil !== 'Coordinador') { c.innerHTML = ''; return; }
+  poblarSelectComunas('fotos-comuna');
+  const comuna = document.getElementById('fotos-comuna').value;
+  poblarSelectColegios('fotos-estab', comuna, document.getElementById('fotos-estab').value, {placeholderTodos: 'Todos los colegios'});
+  const estab = document.getElementById('fotos-estab').value;
+  const estado = document.getElementById('fotos-estado').value;
+  const REALIZADOS = ['Ejecutado', 'Cerrado'], PENDIENTES = ['Pendiente', 'En proceso', 'Reabierto'];
+  const conFotos = [...obs].reverse().map(o => ({o, f: fotosDeTicket(o)})).filter(({o, f}) =>
+    (f.antes.length || f.despues.length) &&
+    (!comuna || objEstab(o.id_establecimiento)?.id_comuna === comuna) &&
+    (!estab || o.id_establecimiento == estab) &&
+    (!estado || (estado === 'realizados' ? REALIZADOS : PENDIENTES).includes(o.estado)));
+  const MAX = 60;
+  const miniaturas = ids => `<div class="photo-grid">${ids.map(id =>
+    `<div class="photo-thumb-wrap"><img data-ph="${esc(id)}" onclick="abrirLightbox('${esc(id)}')" alt=""></div>`).join('')}</div>`;
+  c.innerHTML = conFotos.length ? conFotos.slice(0, MAX).map(({o, f}) => `
+    <div class="card mb-3" style="padding:12px">
+      <div class="record-name">${esc(nomEstab(o.id_establecimiento))}</div>
+      <div class="record-meta">${esc(nomComuna(objEstab(o.id_establecimiento)?.id_comuna) || '—')} · <span class="mono">${esc(o.ticket || 'sin ticket aún')}</span> · <span class="chip">${esc(o.estado)}</span></div>
+      <div class="record-meta" style="margin-bottom:6px">${esc(nomEspec(o.id_especifico) || o.tipo_emergencia || '')}</div>
+      ${f.antes.length ? '<div style="font-size:11px;font-weight:700;color:var(--muted)">ANTES</div>' + miniaturas(f.antes) : ''}
+      ${f.despues.length ? '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-top:6px">DESPUÉS</div>' + miniaturas(f.despues) : ''}
+    </div>`).join('') + (conFotos.length > MAX ? `<p style="color:var(--muted);font-size:12px">Mostrando ${MAX} de ${conFotos.length} tickets con fotos; usa los filtros para acotar.</p>` : '')
+    : '<div class="empty"><div class="ico">📷</div><p>No hay fotos para estos filtros</p></div>';
+  hydratePhotos(c);
+}
+
 // ---- Tablero de Seguimiento: costos, horas hombre y tareas por colegio/recinto ----
 function costoSubsanacion(s) {
   return (s.materiales||[]).reduce((tot,m)=>tot + (+m.cantidad||0) * (+objMat(m.id_material)?.costo_referencial||0), 0);
@@ -3849,10 +4100,11 @@ function dibujarSegChart(canvasId, tipo, labels, datasets, opts) {
 
 // ==================== UI GENERAL ====================
 function refrescarTodo() {
-  const abiertas = obs.filter(o=>o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Ejecutado'||o.estado==='Reabierto');
-  document.getElementById('stat-total').textContent   = obs.length;
+  const visibles = scopedObs();
+  const abiertas = visibles.filter(o=>o.estado==='Pendiente'||o.estado==='En proceso'||o.estado==='Ejecutado'||o.estado==='Reabierto');
+  document.getElementById('stat-total').textContent   = visibles.length;
   document.getElementById('stat-pending').textContent = abiertas.length;
-  document.getElementById('stat-done').textContent    = obs.filter(o=>o.estado==='Cerrado').length;
+  document.getElementById('stat-done').textContent    = visibles.filter(o=>o.estado==='Cerrado').length;
   document.getElementById('stat-queue').textContent   = cola.length;
 
   const cuenta = p => abiertas.filter(o=>o.prioridad===p).length;
@@ -3861,7 +4113,7 @@ function refrescarTodo() {
 
   // Filtros de establecimiento (Tickets / Subsanar): comuna -> colegio, acotado a los
   // establecimientos que de verdad tienen algún ticket registrado.
-  const usadosSet = new Set(obs.map(o=>o.id_establecimiento));
+  const usadosSet = new Set(visibles.map(o=>o.id_establecimiento));
   [['sub-filter-comuna','sub-filter-estab'], ['reg-filter-comuna','reg-filter-estab']].forEach(([idComunaSel, idColSel])=>{
     if (!document.getElementById(idComunaSel)) return;
     poblarSelectComunas(idComunaSel);
