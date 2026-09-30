@@ -1851,7 +1851,7 @@ function openSubsanacionModal(idLocal) {
     <div class="card mb-3" style="padding:12px">
       <div class="card-title" style="margin-bottom:8px">📷 Estado anterior</div>
       ${o.foto_antes?`<img data-ph="${esc(o.foto_antes)}" alt="" style="width:100%;border-radius:8px;max-height:200px;object-fit:cover">`:''}
-      <p style="font-size:13px;margin-top:8px;color:var(--muted)">${esc(o.descripcion)}</p>
+      <p style="font-size:13px;margin-top:8px;color:var(--muted);white-space:pre-line">${esc(o.descripcion)}</p>
     </div>
 
     <hr class="divider">
@@ -2018,7 +2018,7 @@ function openDetalleModal(idLocal) {
         ${esc(nomRecinto(o.id_recinto)||'—')}${o.nombre_espacio?' · '+esc(o.nombre_espacio):''} ·
         ${esc(nomEspec(o.id_especifico)||'—')}${o.cantidad>1?' × '+esc(o.cantidad):''}</p>
       ${o.foto_antes?`<img data-ph="${esc(o.foto_antes)}" alt="" style="width:100%;border-radius:8px;max-height:220px;object-fit:cover;margin-bottom:8px">`:''}
-      <p style="font-size:13px;color:var(--muted)">${esc(o.descripcion)}</p>
+      <p style="font-size:13px;color:var(--muted);white-space:pre-line">${esc(o.descripcion)}</p>
       ${o.justificacion?`<p style="font-size:12px;color:var(--danger);margin-top:8px">Rechazo: ${esc(o.justificacion)}</p>`:''}
     </div>
 
@@ -3317,7 +3317,7 @@ async function exportarReporteColegioPDF() {
         <div class="meta">${esc(fechaCL(o.fecha_registro))} · ${esc(nomRecinto(o.id_recinto)||o.nombre_espacio||'—')} ·
           <span class="chip">Prioridad ${esc(o.prioridad)}</span><span class="chip">${esc(o.estado)}</span></div>
         <div class="label">Descripción de la observación</div>
-        <p>${esc(o.descripcion||'—')}</p>
+        <p style="white-space:pre-line">${esc(o.descripcion||'—')}</p>
         ${subsanado ? `
           <div class="label">Intervención ejecutada${s?' — '+esc(fechaCL(s.fecha_ejecucion))+' · '+esc(nomUsuario(s.id_usuario_ejecuta)):''}</div>
           <p>${esc(s?.detalle_trabajo||'—')}</p>
@@ -3976,7 +3976,7 @@ async function crearTicketsRequerimientos() {
       : '✅ ' + filas.length + ' ticket(s) creados.'}</p>
     ${filas.map(({f, o}) => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
       <span class="mono"><b>${esc(o.ticket || 'pendiente de envío')}</b></span> · ${esc(nomEstab(f.id_establecimiento))}
-      <div style="color:var(--muted)">${esc(o.descripcion)}</div></div>`).join('')}
+      <div style="color:var(--muted);white-space:pre-line">${esc(o.descripcion)}</div></div>`).join('')}
     <button class="btn btn-ghost mt-3" id="req-copiar">📋 Copiar listado</button>`;
   document.getElementById('req-copiar').onclick = () =>
     navigator.clipboard.writeText(texto).then(() => toast('📋 Listado copiado', 'ok'), () => toast('⚠️ No se pudo copiar', 'err'));
