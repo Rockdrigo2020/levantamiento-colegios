@@ -13,8 +13,10 @@
 <!-- Analítica IA (Módulo 5): SheetJS para leer Excel, Chart.js para los gráficos. Se cargan
      diferidos y solo se usan si el usuario entra a esa pestaña; si no hay internet, esa
      pestaña muestra un aviso en vez de romper el resto de la app (ver iaLibsListas()). -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" defer></script>
+<!-- Se sirven desde el propio sitio (vendor/): en redes que bloquean cdnjs la lectura de Excel
+     no cargaba. Si el archivo local falla, se intenta el CDN. -->
+<script src="vendor/xlsx.full.min.js" defer onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';document.head.appendChild(s)"></script>
+<script src="vendor/chart.umd.min.js" defer onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';document.head.appendChild(s)"></script>
 <!-- Seguimiento (Módulo 7): mapa de colegios georreferenciados. Leaflet + tiles de
      OpenStreetMap (gratis, sin API key). Diferido igual que las libs de Analítica IA. -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -867,8 +869,9 @@
         <div class="card mb-3">
           <div class="card-title mb-3">📥 Crear tickets desde planilla</div>
           <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
-            Sube un Excel de requerimientos (columnas Establecimiento, Fecha Solicitud, Área / Especialidad y
-            Requerimiento). Cada fila queda como un ticket <i>Por evaluar</i>. Volver a subir el mismo archivo no duplica tickets.</p>
+            Sube un Excel de requerimientos (columnas Establecimiento, Fecha, Área y Requerimiento u Observación;
+            opcionales RBD, Solicitante y Riesgo). Cada fila queda como ticket <i>Pendiente</i>, sin fotos; el Riesgo define la
+            prioridad (sin Riesgo queda <i>Por evaluar</i>). Volver a subir el mismo archivo no duplica tickets.</p>
           <input type="file" id="req-file" accept=".xlsx,.xls,.csv" onchange="leerPlanillaRequerimientos(this.files[0]); this.value=''">
           <div id="req-preview" class="mt-3"></div>
         </div>
