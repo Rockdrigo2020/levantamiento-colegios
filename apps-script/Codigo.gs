@@ -344,8 +344,19 @@ function guardarObservacion(d) {
   // foto_antes_url (compatibilidad) y el resto se guarda en fotos_antes_urls separado por ';'.
   const fotos = (o.fotos_antes && o.fotos_antes.length ? o.fotos_antes : [o.foto_antes]).filter(Boolean);
   const urls = fotos.map((f, i) => subirFoto(f, ticket + '_antes_' + (i + 1) + '.jpg')).filter(Boolean);
-  const urlPrincipal = urls[0] || (prev && prev.foto_antes_url) || '';
-  const urlsTexto = urls.length ? urls.join(';') : ((prev && prev.fotos_antes_urls) || '');
+  let urlPrincipal = urls[0] || (prev && prev.foto_antes_url) || '';
+  let urlsTexto = urls.length ? urls.join(';') : ((prev && prev.fotos_antes_urls) || '');
+  // fotos_agregar: suma fotos a un ticket que ya tiene (hasta 3 en total) sin reemplazar las anteriores.
+  let fotosAgregadas = null;
+  if (prev && o.fotos_agregar && o.fotos_agregar.length) {
+    const previas = String(prev.fotos_antes_urls || prev.foto_antes_url || '').split(';').filter(Boolean);
+    const nuevasUrls = o.fotos_agregar.slice(0, Math.max(0, 3 - previas.length))
+      .map((f, i) => subirFoto(f, ticket + '_antes_' + (previas.length + i + 1) + '.jpg')).filter(Boolean);
+    const todas = previas.concat(nuevasUrls);
+    urlPrincipal = todas[0] || '';
+    urlsTexto = todas.join(';');
+    fotosAgregadas = nuevasUrls.length;
+  }
 
   upsert('OBSERVACION', 'id_local', o.id_local, {
     ticket: ticket,
@@ -369,7 +380,7 @@ function guardarObservacion(d) {
     actualizado: new Date()
   });
   if (!prev) notificarTicket(o, ticket);
-  return {status:'ok', ticket:ticket, id_local:o.id_local};
+  return {status:'ok', ticket:ticket, id_local:o.id_local, fotos_agregadas:fotosAgregadas};
 }
 
 /** Correlativo por prefijo y anio: SLEP-2026-000148 / EMG-2026-000027 */
