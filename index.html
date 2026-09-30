@@ -864,6 +864,14 @@
 
       <!-- Bandeja de observaciones (toda la red) -->
       <div class="subpanel on" id="ges-bandeja">
+        <div class="card mb-3">
+          <div class="card-title mb-3">📥 Crear tickets desde planilla</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Sube un Excel de requerimientos (columnas Establecimiento, Fecha Solicitud, Área / Especialidad y
+            Requerimiento). Cada fila queda como un ticket <i>Por evaluar</i>. Volver a subir el mismo archivo no duplica tickets.</p>
+          <input type="file" id="req-file" accept=".xlsx,.xls,.csv" onchange="leerPlanillaRequerimientos(this.files[0]); this.value=''">
+          <div id="req-preview" class="mt-3"></div>
+        </div>
         <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Todas las observaciones de la red, para evaluación técnica y priorización. Usa la pestaña <b>Tickets</b> para ver el detalle y priorizar cada una.</p>
         <div class="kpi-grid">
           <div class="kpi-card"><div class="kpi-val" id="ges-kpi-eval">0</div><div class="kpi-lbl">Por evaluar</div></div>
@@ -1217,6 +1225,7 @@ let asignaciones = leerLS(LS.asig, []);   // {id_local, id_usuario, id_estableci
 let asigCola     = leerLS(LS.asigcola, []);
 let rutas        = leerLS(LS.rutas, []);   // historial de rutas a terreno (planilla de planificación)
 let rutasPreview  = [];                   // filas leídas del Excel, antes de cargarlas
+let reqPreview    = [];                   // requerimientos leídos del Excel, antes de crear los tickets
 let segCharts    = {};                    // instancias Chart.js del tablero de Seguimiento
 
 // ==================== UTILIDADES ====================
@@ -3707,14 +3716,17 @@ function fechaISO(v) {
 const fechaCorta = iso => iso ? iso.slice(8, 10) + '-' + iso.slice(5, 7) + '-' + iso.slice(0, 4) : '';
 // Quita restos de correos pegados en la planilla, ej. "[RE: Progra...io de 2026 | Outlook]"
 const limpiarCelda = v => String(v == null ? '' : v).replace(/\s*\[[^\]]*outlook[^\]]*\]/gi, '').replace(/\s+/g, ' ').trim();
-function idRuta(fecha, maestro, estab) {
-  const txt = fecha + '|' + normTxt(maestro) + '|' + normTxt(estab);
+// Hash estable de 64 bits (dos FNV-1a) para ids deterministas: reimportar no duplica.
+function hash64(txt) {
   let h1 = 0x811c9dc5, h2 = 0x01000193;
   for (let i = 0; i < txt.length; i++) {
     h1 = Math.imul(h1 ^ txt.charCodeAt(i), 16777619) >>> 0;
     h2 = Math.imul(h2 ^ txt.charCodeAt(i), 2246822519) >>> 0;
   }
-  return 'RUTA_' + h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+  return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+}
+function idRuta(fecha, maestro, estab) {
+  return 'RUTA_' + hash64(fecha + '|' + normTxt(maestro) + '|' + normTxt(estab));
 }
 function matchUsuarioPorNombre(nombre) {
   const n = normTxt(nombre);
@@ -3728,6 +3740,22 @@ function matchEstabPorNombre(nombre) {
   if (exacto) return exacto;
   const parciales = lista.filter(e => normTxt(e.nombre).includes(n) || n.includes(normTxt(e.nombre)));
   return parciales.length === 1 ? parciales[0] : null;
+}
+// Como matchEstabPorNombre, pero tolera que la planilla diga "Colegio X" y el catálogo
+// "Escuela X" o "Liceo Bicentenario ... X": compara solo las palabras propias del nombre.
+const PALABRAS_GENERICAS = new Set(['colegio','escuela','liceo','jardin','infantil','sala','cuna','bicentenario',
+  'excelencia','basica','complejo','educacional','de','del','la','el','los','las']);
+function matchEstabFlexible(nombre) {
+  const directo = matchEstabPorNombre(nombre);
+  if (directo) return directo;
+  const tokens = t => normTxt(t).replace(/[^a-z0-9ñ ]+/g, ' ').split(/\s+/).filter(Boolean);
+  const propias = tokens(nombre).filter(w => !PALABRAS_GENERICAS.has(w));
+  if (!propias.length) return null;
+  const hits = (cat?.establecimientos || []).filter(e => {
+    const set = new Set(tokens(e.nombre));
+    return propias.every(w => set.has(w));
+  });
+  return hits.length === 1 ? hits[0] : null;
 }
 async function leerPlanillaRutas(file) {
   if (!file) return;
@@ -3843,6 +3871,102 @@ function pintarRutas() {
           <div style="color:var(--muted)">${esc(r.trabajo || 'Sin detalle')}${r.gestor ? ' · Gestor: ' + esc(r.gestor) : ''}</div></div>`).join('')}
       </div>`).join('')
     : '<p style="color:var(--muted);font-size:12px">Aún no hay rutas cargadas. Importa la planilla de planificación arriba.</p>';
+}
+
+// ---- Tickets desde planilla de requerimientos (Bandeja de Gestión, Infraestructura) ----
+async function leerPlanillaRequerimientos(file) {
+  if (!file) return;
+  const cont = document.getElementById('req-preview');
+  if (typeof XLSX === 'undefined') { toast('⚠️ Sin conexión: no se pudo cargar el lector de Excel', 'err'); return; }
+  let wb;
+  try { wb = XLSX.read(await file.arrayBuffer(), {type: 'array'}); }
+  catch (e) { toast('⚠️ No se pudo leer el archivo', 'err'); return; }
+  const filas = [];
+  for (const nombreHoja of wb.SheetNames) {
+    const matriz = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], {header: 1, raw: true, defval: ''});
+    const iHdr = matriz.findIndex(r => r.some(c => normTxt(c).startsWith('establecimiento')) &&
+                                       r.some(c => normTxt(c).startsWith('requerimiento')));
+    if (iHdr < 0) continue;
+    const hdr = matriz[iHdr].map(c => normTxt(c));
+    const col = n => hdr.findIndex(h => h.startsWith(n));
+    const c = {estab: col('establecimiento'), fecha: col('fecha'), area: col('area'), req: col('requerimiento')};
+    matriz.slice(iHdr + 1).forEach(r => {
+      const establecimiento = limpiarCelda(r[c.estab]);
+      const requerimiento = limpiarCelda(r[c.req]);
+      if (!establecimiento || !requerimiento) return;
+      const fecha = c.fecha >= 0 ? fechaISO(r[c.fecha]) : '';
+      const area = c.area >= 0 ? limpiarCelda(r[c.area]) : '';
+      const e = matchEstabFlexible(establecimiento);
+      filas.push({
+        id_local: 'REQ_' + hash64(normTxt(establecimiento) + '|' + fecha + '|' + normTxt(area) + '|' + normTxt(requerimiento)),
+        establecimiento, id_establecimiento: e ? e.id_establecimiento : '', fecha, area, requerimiento
+      });
+    });
+    break;
+  }
+  const vistos = {};
+  reqPreview = filas.filter(f => !vistos[f.id_local] && (vistos[f.id_local] = true));
+  pintarReqPreview();
+}
+function pintarReqPreview() {
+  const cont = document.getElementById('req-preview');
+  if (!reqPreview.length) {
+    cont.innerHTML = '<p style="color:var(--danger);font-size:13px">No se encontraron requerimientos: la planilla debe tener columnas Establecimiento y Requerimiento.</p>';
+    return;
+  }
+  const colegios = (cat?.establecimientos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const sinColegio = reqPreview.filter(f => !f.id_establecimiento).length;
+  cont.innerHTML = reqPreview.map((f, i) => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:13px"><b>${esc(f.establecimiento)}</b>${f.area ? ' · ' + esc(f.area) : ''}${f.fecha ? ' · ' + esc(fechaCorta(f.fecha)) : ''}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${esc(f.requerimiento)}</div>
+      <select onchange="reqPreview[${i}].id_establecimiento=this.value; pintarReqPreview()">
+        <option value="">— Elige el colegio del catálogo —</option>
+        ${colegios.map(e => `<option value="${esc(e.id_establecimiento)}"${e.id_establecimiento === f.id_establecimiento ? ' selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+      </select>
+    </div>`).join('') + `
+    <p style="font-size:12px;color:var(--muted);margin:10px 0">${sinColegio
+      ? '⚠️ ' + sinColegio + ' fila(s) sin colegio reconocido: elígelo en la lista para poder crear el ticket.'
+      : 'Todos los colegios reconocidos. Se avisará por correo al gestor de cada comuna.'}</p>
+    <button class="btn btn-primary" id="req-crear" onclick="crearTicketsRequerimientos()"${sinColegio ? ' disabled' : ''}>🎫 Crear ${reqPreview.length} ticket(s)</button>`;
+}
+async function crearTicketsRequerimientos() {
+  if (!reqPreview.length || reqPreview.some(f => !f.id_establecimiento)) return;
+  const btn = document.getElementById('req-crear');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Creando tickets…';
+  const lote = reqPreview.slice();
+  for (const f of lote) {
+    if (obs.some(o => o.id_local === f.id_local)) continue;   // ya importado antes: no se duplica
+    obs.push({
+      id_local: f.id_local, ticket: '', id_establecimiento: f.id_establecimiento, id_recinto: '', id_especifico: '',
+      cantidad: 1, descripcion: (f.area ? '[' + f.area + '] ' : '') + f.requerimiento,
+      foto_antes: '', fotos_antes: [], prioridad: 'Por evaluar', estado: 'Pendiente',
+      fecha_registro: f.fecha ? new Date(f.fecha + 'T12:00:00').toISOString() : new Date().toISOString(),
+      id_usuario_levanta: sesion.id_usuario, es_emergencia: false, synced: false
+    });
+    encolar('observacion', f.id_local);
+  }
+  guardar(LS.obs, obs);
+  for (const f of lote) {
+    const o = obs.find(x => x.id_local === f.id_local);
+    if (o && !o.ticket) await enviarUno('observacion', f.id_local);
+  }
+  reqPreview = [];
+  const filas = lote.map(f => ({f, o: obs.find(x => x.id_local === f.id_local)}));
+  const pendientes = filas.filter(({o}) => !o.ticket).length;
+  const texto = filas.map(({f, o}) => (o.ticket || 'pendiente de envío') + ' | ' + nomEstab(f.id_establecimiento) + ' | ' + o.descripcion).join('\n');
+  document.getElementById('req-preview').innerHTML = `
+    <p style="font-size:13px;margin-bottom:6px;color:${pendientes ? 'var(--danger)' : 'var(--ok)'}">${pendientes
+      ? '💾 ' + pendientes + ' ticket(s) quedaron guardados y se enviarán solos al volver la conexión.'
+      : '✅ ' + filas.length + ' ticket(s) creados.'}</p>
+    ${filas.map(({f, o}) => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+      <span class="mono"><b>${esc(o.ticket || 'pendiente de envío')}</b></span> · ${esc(nomEstab(f.id_establecimiento))}
+      <div style="color:var(--muted)">${esc(o.descripcion)}</div></div>`).join('')}
+    <button class="btn btn-ghost mt-3" id="req-copiar">📋 Copiar listado</button>`;
+  document.getElementById('req-copiar').onclick = () =>
+    navigator.clipboard.writeText(texto).then(() => toast('📋 Listado copiado', 'ok'), () => toast('⚠️ No se pudo copiar', 'err'));
+  refrescarTodo();
+  pintarBandejaGestion();
 }
 
 // ---- Galería consolidada de fotos (solo Infraestructura y Coordinador) ----
