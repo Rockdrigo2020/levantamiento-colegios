@@ -2017,10 +2017,12 @@ function openDetalleModal(idLocal) {
       <p style="font-size:12px;color:var(--muted);margin-bottom:8px">
         ${esc(nomRecinto(o.id_recinto)||'—')}${o.nombre_espacio?' · '+esc(o.nombre_espacio):''} ·
         ${esc(nomEspec(o.id_especifico)||'—')}${o.cantidad>1?' × '+esc(o.cantidad):''}</p>
-      ${o.foto_antes?`<img data-ph="${esc(o.foto_antes)}" alt="" style="width:100%;border-radius:8px;max-height:220px;object-fit:cover;margin-bottom:8px">`:''}
+      ${fotosTicketHTML(o)}
       <p style="font-size:13px;color:var(--muted);white-space:pre-line">${esc(o.descripcion)}</p>
       ${o.justificacion?`<p style="font-size:12px;color:var(--danger);margin-top:8px">Rechazo: ${esc(o.justificacion)}</p>`:''}
     </div>
+
+    ${bloqueAgregarFotos(o)}
 
     ${mis.map(s=>`
       <div class="card mb-3" style="padding:12px;border-color:${s.resuelto?'var(--ok)':'var(--accent)'}">
@@ -2051,7 +2053,48 @@ function openDetalleModal(idLocal) {
       `<button class="btn btn-primary mb-3" onclick="closeModal('modal-detalle');setTimeout(()=>openSubsanacionModal('${esc(o.id_local)}'),120)">✅ Registrar subsanación</button>`:''}
     <button class="btn btn-ghost" onclick="closeModal('modal-detalle')">Cerrar</button>`;
   hydratePhotos(document.getElementById('modal-det-content'));
+  pintarFotosGrid('masd');
   openModal('modal-detalle');
+}
+
+// ---- Agregar fotografías a un ticket ya creado (p. ej. los importados desde planilla) ----
+const fotosAntesDe = o => (o.fotos_antes && o.fotos_antes.length ? o.fotos_antes : [o.foto_antes]).filter(Boolean);
+function fotosTicketHTML(o) {
+  const ids = fotosAntesDe(o).concat(o.fotos_nuevas || []);
+  if (!ids.length) return '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">📷 Este ticket aún no tiene fotografías.</p>';
+  return `<div class="photo-grid" style="margin-bottom:8px">${ids.map(id =>
+    `<div class="photo-thumb-wrap"><img data-ph="${esc(id)}" onclick="abrirLightbox('${esc(id)}')" alt=""></div>`).join('')}</div>` +
+    ((o.fotos_nuevas || []).length ? '<p style="font-size:11px;color:var(--danger);margin-bottom:8px">💾 Hay fotos pendientes de envío: se subirán al volver la conexión.</p>' : '');
+}
+function bloqueAgregarFotos(o) {
+  const max = Math.max(0, 3 - fotosAntesDe(o).length - (o.fotos_nuevas || []).length);
+  MAX_FOTOS.masd = max; currentFotos.masd = [];
+  if (!max) return '';
+  return `<div class="card mb-3" style="padding:12px">
+    <div class="card-title mb-3">📷 Agregar fotografías</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Puedes subir hasta ${max} foto(s) más a este ticket.</p>
+    <div class="photo-grid" id="masd-fotos-grid"></div>
+    <input type="file" id="masd-file" accept="image/*" multiple onchange="handleMultiPhoto('masd',this)">
+    <div class="grid-2 mt-3">
+      <button class="btn btn-ghost btn-sm" onclick="abrirFoto('masd-file',false)">🖼 Galería</button>
+      <button class="btn btn-ghost btn-sm" onclick="abrirFoto('masd-file',true)">📷 Cámara</button></div>
+    <button class="btn btn-primary mt-3" id="masd-subir" onclick="guardarFotosTicket('${esc(o.id_local)}')">⬆️ Subir fotos al ticket</button>
+  </div>`;
+}
+async function guardarFotosTicket(idLocal) {
+  const o = obs.find(x => x.id_local === idLocal);
+  const ids = (currentFotos.masd || []).slice();
+  if (!o || !ids.length) { toast('Elige al menos una foto', 'err'); return; }
+  const btn = document.getElementById('masd-subir');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Subiendo…'; }
+  o.fotos_nuevas = (o.fotos_nuevas || []).concat(ids); o.synced = false;
+  currentFotos.masd = [];
+  guardar(LS.obs, obs);
+  encolar('observacion', idLocal);
+  const ok = await enviarUno('observacion', idLocal);
+  toast(ok ? '✅ Fotos agregadas al ticket' : '💾 Fotos guardadas en este equipo; se subirán solas al volver la conexión', ok ? 'ok' : 'err');
+  refrescarTodo();
+  openDetalleModal(idLocal);
 }
 
 async function priorizar(idLocal, rechazar) {
@@ -2098,8 +2141,23 @@ async function enviarUno(tipo, id) {
   if (tipo === 'observacion') {
     const o = obs.find(x=>x.id_local===id); if (!o) return true;
     const fotos = await idsToB64(o.fotos_antes && o.fotos_antes.length ? o.fotos_antes : [o.foto_antes]);
-    payload = {action:'observacion', data: Object.assign({}, o, {foto_antes: fotos[0]||'', fotos_antes: fotos})};
-    onOk = r => { o.ticket = r.ticket; o.synced = true; guardar(LS.obs, obs); };
+    const nuevas = o.ticket ? await idsToB64(o.fotos_nuevas || []) : [];
+    const data = Object.assign({}, o, {foto_antes: fotos[0]||'', fotos_antes: fotos});
+    let agregaSobreExistentes = false;
+    if (nuevas.length) {
+      if (fotosAntesDe(o).length) {     // ya tenía fotos: se suman (requiere el servidor con fotos_agregar)
+        Object.assign(data, {foto_antes: '', fotos_antes: [], fotos_agregar: nuevas}); agregaSobreExistentes = true;
+      } else Object.assign(data, {foto_antes: nuevas[0], fotos_antes: nuevas});
+    }
+    payload = {action:'observacion', data};
+    onOk = r => {
+      if (agregaSobreExistentes && r.fotos_agregadas == null) throw new Error('servidor sin fotos_agregar');
+      o.ticket = r.ticket; o.synced = true;
+      if ((o.fotos_nuevas || []).length) {
+        o.fotos_antes = fotosAntesDe(o).concat(o.fotos_nuevas); o.foto_antes = o.fotos_antes[0]; o.fotos_nuevas = [];
+      }
+      guardar(LS.obs, obs);
+    };
 
   } else if (tipo === 'subsanacion') {
     const s = subs.find(x=>x.id_subsanacion===id); if (!s) return true;
@@ -2152,7 +2210,14 @@ async function enviarUno(tipo, id) {
 
   const r = await api(payload);
   if (!r || r.status !== 'ok') return false;
-  if (onOk) onOk(r);
+  if (onOk) {
+    try { onOk(r); }
+    catch (e) {
+      console.warn(e.message);
+      toast('⚠️ El servidor debe actualizarse (Apps Script) para sumar fotos a un ticket que ya tiene; quedan guardadas en este equipo', 'err');
+      return false;
+    }
+  }
   cola = cola.filter(c=>!(c.id===id && c.tipo===tipo));
   guardar(LS.cola, cola); pintarCola();
   return true;
@@ -2244,6 +2309,9 @@ function fusionar(r) {
         local.prioridad = srv.prioridad;
         local.estado = srv.estado;
         local.justificacion = srv.justificacion;
+        if (srv.descripcion) local.descripcion = srv.descripcion;   // p. ej. tickets editados o separados por tarea
+        const urls = srv.fotos_antes_urls ? String(srv.fotos_antes_urls).split(';').filter(Boolean) : (srv.foto_antes_url ? [srv.foto_antes_url] : []);
+        if (urls.length && !(local.fotos_nuevas || []).length) { local.fotos_antes = urls; local.foto_antes = urls[0]; }   // fotos subidas desde otro equipo
       }
     } else {
       obs.push({
