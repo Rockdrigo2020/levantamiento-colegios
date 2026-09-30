@@ -156,7 +156,12 @@ const SCHEMA = {
   // activas (varios colegios a su cargo); 'activa' en 'false' es la forma de desasignar sin
   // perder el historial.
   ASIGNACION:          ['id_local','id_usuario','id_establecimiento','id_usuario_coordinador',
-                        'fecha','activa','actualizado','tareas']
+                        'fecha','activa','actualizado','tareas'],
+  // Historial de rutas a terreno (una fila = un maestro en un colegio un día), cargado
+  // desde la planilla de planificación. Guarda los nombres tal cual vienen y, si se
+  // reconocen, el id del maestro y del establecimiento.
+  RUTA:                ['id_ruta','fecha','gestor','maestro','id_usuario_maestro','establecimiento',
+                        'id_establecimiento','vehiculo','trabajo','origen','id_usuario_carga','actualizado']
 };
 
 // ============ ENTRYPOINTS ============
@@ -228,6 +233,8 @@ function doPost(e) {
       case 'asignacion_pull':       return json(asignacionPull(d));
       case 'asignacion_guardar':    return json(asignacionGuardar(d));
       case 'comuna_gestor':         return json(comunaGestor(d));
+      case 'rutas_importar':        return json(rutasImportar(d));
+      case 'rutas_pull':            return json(rutasPull(d));
       default:            return json({status:'error', message:'accion desconocida: ' + d.action});
     }
   } catch (err) {
@@ -295,9 +302,14 @@ function catalogos(d) {
  *  el Coordinador le haya asignado (si no tiene asignaciones, mantiene visibilidad de red). */
 function pull(d) {
   let obs = leer('OBSERVACION');
-  if (d.perfil === 'Director' && d.id_establecimiento) {
-    obs = obs.filter(o => String(o.id_establecimiento) === String(d.id_establecimiento));
-  } else if (d.perfil === 'Maestro' && d.id_establecimientos && d.id_establecimientos.length) {
+  // El perfil se toma de la planilla cuando llega id_usuario, no de lo que declare el cliente.
+  const solicitante = d.id_usuario ? buscar('USUARIO', 'id_usuario', d.id_usuario) : null;
+  const perfil = solicitante ? solicitante.perfil : d.perfil;
+  if (perfil === 'Director') {
+    // Cada Director ve solo los tickets que él mismo levantó (sin id_usuario no ve ninguno).
+    const idDirector = solicitante ? String(solicitante.id_usuario) : '';
+    obs = obs.filter(o => idDirector && String(o.id_usuario_levanta) === idDirector);
+  } else if (perfil === 'Maestro' && d.id_establecimientos && d.id_establecimientos.length) {
     const set = {}; d.id_establecimientos.forEach(id => set[String(id)] = 1);
     obs = obs.filter(o => set[String(o.id_establecimiento)]);
   }
@@ -1006,6 +1018,40 @@ function comunaGestor(d) {
   comuna.id_gestor = c.id_gestor || '';
   upsert('COMUNA', 'id_comuna', c.id_comuna, comuna);
   return {status:'ok'};
+}
+
+/** Carga (o actualiza) rutas a terreno desde la planilla de planificación. El id_ruta lo
+ *  arma el cliente con fecha|maestro|establecimiento, así que volver a importar el mismo
+ *  archivo actualiza las filas existentes en vez de duplicarlas. */
+function rutasImportar(d) {
+  if (!permisoCoordinador(d.id_usuario)) return {status:'error', message:'sin permiso para importar rutas'};
+  const rutas = (d.rutas || []).filter(r => r && r.id_ruta && r.fecha);
+  if (!rutas.length) return {status:'error', message:'no hay rutas para importar'};
+  if (rutas.length > 5000) return {status:'error', message:'demasiadas filas en una sola carga (máximo 5000)'};
+  const sh = hoja('RUTA');
+  const cols = SCHEMA.RUTA;
+  const n = sh.getLastRow();
+  const filaDeId = {};
+  if (n > 1) sh.getRange(2, 1, n - 1, 1).getValues().forEach((v, i) => { filaDeId[String(v[0])] = i + 2; });
+  const ahora = new Date();
+  const nuevas = [];
+  let actualizadas = 0;
+  rutas.forEach(r => {
+    const fila = cols.map(c => c === 'origen' ? (r.origen || 'planilla')
+      : c === 'id_usuario_carga' ? d.id_usuario
+      : c === 'actualizado' ? ahora
+      : (r[c] !== undefined && r[c] !== null ? r[c] : ''));
+    const existente = filaDeId[String(r.id_ruta)];
+    if (existente > 0) { sh.getRange(existente, 1, 1, cols.length).setValues([fila]); actualizadas++; }
+    else if (existente === undefined) { nuevas.push(fila); filaDeId[String(r.id_ruta)] = -1; }
+  });
+  if (nuevas.length) sh.getRange(sh.getLastRow() + 1, 1, nuevas.length, cols.length).setValues(nuevas);
+  return {status:'ok', nuevas: nuevas.length, actualizadas: actualizadas};
+}
+
+function rutasPull(d) {
+  if (!permisoCoordinador(d.id_usuario)) return {status:'error', message:'sin permiso para ver rutas'};
+  return {status:'ok', rutas: leer('RUTA')};
 }
 
 /** Avisa por correo al Maestro/Gestor la ruta diaria que se le acaba de asignar
