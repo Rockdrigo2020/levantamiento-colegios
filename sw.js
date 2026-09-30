@@ -10,7 +10,8 @@
 //     carpeta/dominio lo publique IT (ej. www.empresa.cl/levantapp/).
 // v7: iconos del manifest pasan de SVG embebido a PNG reales (icon-192/512/512-maskable),
 //     requisito de PWABuilder para empaquetar como APK/AAB — se agregan al precache.
-const CACHE = 'levantapp-v7';
+// v8: SheetJS y Chart.js se sirven desde vendor/ (redes que bloquean cdnjs) y se precachean.
+const CACHE = 'levantapp-v8';
 const BASE = self.registration.scope;
 const ASSETS = [
   BASE,
@@ -18,7 +19,9 @@ const ASSETS = [
   BASE + 'manifest.json',
   BASE + 'icon-192.png',
   BASE + 'icon-512.png',
-  BASE + 'icon-512-maskable.png'
+  BASE + 'icon-512-maskable.png',
+  BASE + 'vendor/xlsx.full.min.js',
+  BASE + 'vendor/chart.umd.min.js'
 ];
 
 self.addEventListener('install', e => {
