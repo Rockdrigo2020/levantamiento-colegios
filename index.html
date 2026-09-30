@@ -3715,7 +3715,7 @@ function fechaISO(v) {
 }
 const fechaCorta = iso => iso ? iso.slice(8, 10) + '-' + iso.slice(5, 7) + '-' + iso.slice(0, 4) : '';
 // Quita restos de correos pegados en la planilla, ej. "[RE: Progra...io de 2026 | Outlook]"
-const limpiarCelda = v => String(v == null ? '' : v).replace(/\s*\[[^\]]*outlook[^\]]*\]/gi, '').replace(/\s+/g, ' ').trim();
+const limpiarCelda = v => String(v == null ? '' : v).replace(/(\s*,?\s*\[[^\]]*outlook[^\]]*\])+/gi, '').replace(/\s+/g, ' ').trim();
 // Hash estable de 64 bits (dos FNV-1a) para ids deterministas: reimportar no duplica.
 function hash64(txt) {
   let h1 = 0x811c9dc5, h2 = 0x01000193;
@@ -3884,22 +3884,28 @@ async function leerPlanillaRequerimientos(file) {
   const filas = [];
   for (const nombreHoja of wb.SheetNames) {
     const matriz = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], {header: 1, raw: true, defval: ''});
-    const iHdr = matriz.findIndex(r => r.some(c => normTxt(c).startsWith('establecimiento')) &&
-                                       r.some(c => normTxt(c).startsWith('requerimiento')));
+    const esReq = c => normTxt(c).startsWith('requerimiento') || normTxt(c).startsWith('observacion');
+    const iHdr = matriz.findIndex(r => r.some(c => normTxt(c).startsWith('establecimiento')) && r.some(esReq));
     if (iHdr < 0) continue;
     const hdr = matriz[iHdr].map(c => normTxt(c));
     const col = n => hdr.findIndex(h => h.startsWith(n));
-    const c = {estab: col('establecimiento'), fecha: col('fecha'), area: col('area'), req: col('requerimiento')};
+    const c = {estab: col('establecimiento'), fecha: col('fecha'), area: col('area'), rbd: col('rbd'),
+               solicitante: col('solicitante'), riesgo: col('riesgo'),
+               req: hdr.findIndex(h => h.startsWith('requerimiento') || h.startsWith('observacion'))};
     matriz.slice(iHdr + 1).forEach(r => {
       const establecimiento = limpiarCelda(r[c.estab]);
       const requerimiento = limpiarCelda(r[c.req]);
       if (!establecimiento || !requerimiento) return;
       const fecha = c.fecha >= 0 ? fechaISO(r[c.fecha]) : '';
       const area = c.area >= 0 ? limpiarCelda(r[c.area]) : '';
-      const e = matchEstabFlexible(establecimiento);
+      const rbd = c.rbd >= 0 ? String(r[c.rbd]).replace(/\D/g, '') : '';
+      const e = (rbd && (cat?.establecimientos || []).find(x => String(x.rbd || '').replace(/\D/g, '') === rbd)) || matchEstabFlexible(establecimiento);
+      const riesgo = c.riesgo >= 0 ? normTxt(r[c.riesgo]) : '';
+      const prioridad = {critico: 'Alta', alto: 'Alta', medio: 'Media', bajo: 'Baja'}[riesgo] || 'Por evaluar';
       filas.push({
         id_local: 'REQ_' + hash64(normTxt(establecimiento) + '|' + fecha + '|' + normTxt(area) + '|' + normTxt(requerimiento)),
-        establecimiento, id_establecimiento: e ? e.id_establecimiento : '', fecha, area, requerimiento
+        establecimiento, id_establecimiento: e ? e.id_establecimiento : '', fecha, area, requerimiento, prioridad,
+        solicitante: c.solicitante >= 0 ? limpiarCelda(r[c.solicitante]) : ''
       });
     });
     break;
@@ -3918,8 +3924,8 @@ function pintarReqPreview() {
   const sinColegio = reqPreview.filter(f => !f.id_establecimiento).length;
   cont.innerHTML = reqPreview.map((f, i) => `
     <div style="padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="font-size:13px"><b>${esc(f.establecimiento)}</b>${f.area ? ' · ' + esc(f.area) : ''}${f.fecha ? ' · ' + esc(fechaCorta(f.fecha)) : ''}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${esc(f.requerimiento)}</div>
+      <div style="font-size:13px"><b>${esc(f.establecimiento)}</b>${f.area ? ' · ' + esc(f.area) : ''}${f.fecha ? ' · ' + esc(fechaCorta(f.fecha)) : ''}${f.prioridad !== 'Por evaluar' ? ' · ' + esc(f.prioridad) : ''}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${esc(f.requerimiento)}${f.solicitante ? ' — solicita ' + esc(f.solicitante) : ''}</div>
       <select onchange="reqPreview[${i}].id_establecimiento=this.value; pintarReqPreview()">
         <option value="">— Elige el colegio del catálogo —</option>
         ${colegios.map(e => `<option value="${esc(e.id_establecimiento)}"${e.id_establecimiento === f.id_establecimiento ? ' selected' : ''}>${esc(e.nombre)}</option>`).join('')}
@@ -3930,17 +3936,23 @@ function pintarReqPreview() {
       : 'Todos los colegios reconocidos. Se avisará por correo al gestor de cada comuna.'}</p>
     <button class="btn btn-primary" id="req-crear" onclick="crearTicketsRequerimientos()"${sinColegio ? ' disabled' : ''}>🎫 Crear ${reqPreview.length} ticket(s)</button>`;
 }
+// Un requerimiento ya cargado (por id, o por colegio + fecha + texto si vino de otra planilla) no se duplica.
+function obsDeRequerimiento(f) {
+  return obs.find(o => o.id_local === f.id_local) ||
+    obs.find(o => o.id_establecimiento == f.id_establecimiento && o.descripcion.includes(f.requerimiento) &&
+                  (!f.fecha || fechaISO(o.fecha_registro) === f.fecha));
+}
 async function crearTicketsRequerimientos() {
   if (!reqPreview.length || reqPreview.some(f => !f.id_establecimiento)) return;
   const btn = document.getElementById('req-crear');
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Creando tickets…';
   const lote = reqPreview.slice();
   for (const f of lote) {
-    if (obs.some(o => o.id_local === f.id_local)) continue;   // ya importado antes: no se duplica
+    if (obsDeRequerimiento(f)) continue;   // ya importado antes: no se duplica
     obs.push({
       id_local: f.id_local, ticket: '', id_establecimiento: f.id_establecimiento, id_recinto: '', id_especifico: '',
-      cantidad: 1, descripcion: (f.area ? '[' + f.area + '] ' : '') + f.requerimiento,
-      foto_antes: '', fotos_antes: [], prioridad: 'Por evaluar', estado: 'Pendiente',
+      cantidad: 1, descripcion: (f.area ? '[' + f.area + '] ' : '') + f.requerimiento + (f.solicitante ? ' (Solicita: ' + f.solicitante + ')' : ''),
+      foto_antes: '', fotos_antes: [], prioridad: f.prioridad || 'Por evaluar', estado: 'Pendiente',
       fecha_registro: f.fecha ? new Date(f.fecha + 'T12:00:00').toISOString() : new Date().toISOString(),
       id_usuario_levanta: sesion.id_usuario, es_emergencia: false, synced: false
     });
@@ -3948,11 +3960,11 @@ async function crearTicketsRequerimientos() {
   }
   guardar(LS.obs, obs);
   for (const f of lote) {
-    const o = obs.find(x => x.id_local === f.id_local);
-    if (o && !o.ticket) await enviarUno('observacion', f.id_local);
+    const o = obsDeRequerimiento(f);
+    if (o && !o.ticket) await enviarUno('observacion', o.id_local);
   }
   reqPreview = [];
-  const filas = lote.map(f => ({f, o: obs.find(x => x.id_local === f.id_local)}));
+  const filas = lote.map(f => ({f, o: obsDeRequerimiento(f)}));
   const pendientes = filas.filter(({o}) => !o.ticket).length;
   const texto = filas.map(({f, o}) => (o.ticket || 'pendiente de envío') + ' | ' + nomEstab(f.id_establecimiento) + ' | ' + o.descripcion).join('\n');
   document.getElementById('req-preview').innerHTML = `
