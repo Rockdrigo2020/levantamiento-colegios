@@ -1451,11 +1451,73 @@ function matchEmpresaPorNombre(nombre) {
       || lista.find(x=>d.includes(normTxt(x.nombre)) || normTxt(x.nombre).includes(d))
       || null;
 }
-const nomAccion = id => (cat?.acciones||[]).find(a=>a.id_accion==id)?.descripcion || id || '—';
+// Acciones de ejecución por tipo de trabajo. El catálogo del servidor solo trae acciones por elemento
+// específico y los tickets importados desde planilla no tienen elemento, así que la lista salía vacía.
+// Estas acciones se ofrecen según el área del ticket ("[Área] ..." al inicio de la descripción) o el
+// elemento elegido al levantar. Los ids (AX-…) son estables: se guardan en la subsanación.
+const AREAS_ACCION = {
+  electricidad: ['Electricidad', ['Se cambian focos / ampolletas', 'Se cambian tubos LED', 'Se cambia luminaria completa', 'Se repara luminaria (conexión / driver / balastro)', 'Se instalan luminarias nuevas', 'Se cambia enchufe / tomacorriente', 'Se instala enchufe nuevo (simple, doble o triple)', 'Se cambia interruptor', 'Se revisa y corrige cableado', 'Se crean nuevos circuitos eléctricos', 'Se ordena y rotula tablero eléctrico', 'Se cambian automáticos / disyuntores', 'Se instala o cambia protector diferencial', 'Se mide y corrige puesta a tierra', 'Se realiza evaluación eléctrica completa', 'Se repara canalización / conduit', 'Se corrige conexión de interruptores o circuitos cruzados']],
+  gasfiteria: ['Gasfitería', ['Se repara fuga de agua', 'Se cambia llave / grifería', 'Se cambia fitting / cañería', 'Se cambia tapa de WC', 'Se cambia WC o estanque completo', 'Se repara mecanismo de estanque', 'Se repara o cambia urinario', 'Se repara o cambia lavamanos', 'Se repara o cambia ducha', 'Se destapa desagüe / cámara', 'Se cambia sifón', 'Se repara red sanitaria (agua / alcantarillado)', 'Se repara o cambia bomba de agua', 'Se limpia estanque de agua', 'Se solicita limpieza de fosa séptica', 'Se revisa y sella instalación de gas']],
+  agua_potable: ['Agua potable', ['Se realiza diagnóstico de bomba / sistema APR', 'Se repara bomba APR', 'Se cambia bomba APR', 'Se restituye el suministro de agua', 'Se repara red de agua potable', 'Se coordina con empresa sanitaria / comité APR', 'Se gestiona abastecimiento provisorio (camión aljibe)', 'Se repara o cambia estanque de agua']],
+  climatizacion: ['Climatización', ['Se realiza mantención preventiva de aire acondicionado', 'Se recarga gas refrigerante', 'Se repara fuga de gas refrigerante', 'Se regula / calibra control de temperatura', 'Se cambia control remoto o tarjeta electrónica', 'Se limpian filtros y unidades', 'Se repara condensadora / compresor', 'Se repara drenaje del equipo', 'Se cambia equipo de aire acondicionado', 'Se instala equipo nuevo']],
+  calefaccion: ['Calefacción', ['Se realiza mantención de estufas', 'Se cambia cañón de estufa', 'Se limpia ducto / chimenea', 'Se cambia estufa', 'Se instala estufa nueva', 'Se realiza mantención de caldera', 'Se repara radiadores', 'Se revisa tiraje y combustión', 'Se revisa instalación de gas / combustible']],
+  cerrajeria: ['Cerrajería', ['Se cambia chapa / cerradura', 'Se cambia cerradura principal', 'Se corta y cambia candado', 'Se cambia manilla', 'Se repara hoja de puerta', 'Se cambian bisagras', 'Se repara o cambia cierrapuertas', 'Se repara motor de portón', 'Se repara portón / reja', 'Se instala barra antipánico', 'Se hacen copias de llaves']],
+  cubiertas: ['Cubiertas', ['Se sellan goteras', 'Se reponen planchas / tejas', 'Se repara plancha de zinc', 'Se instalan canaletas y bajadas', 'Se limpian canaletas y bajadas', 'Se repara canal de aguas lluvia', 'Se repara estructura de techo', 'Se repara cumbrera', 'Se instala o repone hojalatería (forros)', 'Se impermeabiliza cubierta']],
+  aguas_lluvias: ['Aguas lluvias', ['Se limpian y destapan sumideros y cámaras', 'Se construye o repara canal de evacuación', 'Se instalan bajadas de aguas lluvia', 'Se corrigen pendientes / se rellena', 'Se instala drenaje', 'Se instala bomba de achique']],
+  plagas: ['Control de plagas', ['Se realiza erradicación pasiva de murciélagos', 'Se instalan mallas / sellos en accesos', 'Se realiza desratización', 'Se realiza control de plagas (fumigación)', 'Se limpia y desinfecta (guano / residuos)', 'Se sanitiza el recinto']],
+  cocina: ['Cocina', ['Se instala baño maría', 'Se repara cocina industrial', 'Se repara campana extractora', 'Se repara refrigerador / congelador', 'Se repara lavaplatos', 'Se instala o repara mesón de trabajo', 'Se cambia flexible / regulador de gas', 'Se revisa y sella instalación de gas', 'Se instala equipo nuevo']],
+  seguridad: ['Seguridad', ['Se recargan o reponen extintores', 'Se instala señalética de seguridad', 'Se cambia luz de emergencia', 'Se poda árbol', 'Se tala árbol de riesgo', 'Se despejan cables eléctricos de ramas', 'Se repara vía de evacuación', 'Se corta y cambia candado de salida de emergencia', 'Se instala barra antipánico', 'Se repara portón eléctrico', 'Se repara cierre perimetral', 'Se instala cámara / alarma']],
+  exteriores: ['Áreas verdes y exteriores', ['Se poda árbol', 'Se tala árbol de riesgo', 'Se retiran ramas y escombros', 'Se repara cierre perimetral', 'Se repara juego infantil', 'Se repara multicancha', 'Se repara vereda / acceso', 'Se construye o repara rampa']],
+  pintura: ['Pintura', ['Se pintan muros interiores', 'Se pinta fachada / exterior', 'Se pintan cielos', 'Se pintan rejas y estructuras metálicas', 'Se trata humedad antes de pintar', 'Se empasta y lija', 'Se pintan demarcaciones de piso', 'Se repara tabique / volcanita']],
+  muros: ['Muros y cielos', ['Se pinta superficie', 'Se repara tabique / volcanita', 'Se repone cielo falso', 'Se trata humedad y se ventila', 'Se repara fisura (informar si es estructural)']],
+  vidrios: ['Vidrios', ['Se repone vidrio quebrado', 'Se repara marco de ventana', 'Se resella ventana']],
+  puertas: ['Puertas', ['Se repara hoja de puerta', 'Se cambia puerta completa', 'Se repara marco de puerta', 'Se cambian bisagras', 'Se repara o cambia cierrapuertas']],
+  mobiliario: ['Mobiliario', ['Se repara mesa / banco escolar', 'Se repara silla', 'Se repara estante / repisa', 'Se repara pizarra', 'Se repara casillero']],
+  pisos: ['Pisos y pavimentos', ['Se reponen palmetas / cerámicas', 'Se repara piso flotante / vinílico', 'Se repara radier / pavimento', 'Se nivela desnivel / socavón']],
+  ti: ['TI y comunicaciones', ['Se revisa y repara la red de datos', 'Se cambian equipos de internet', 'Se cambia equipo de telefonía', 'Se instala protección contra sobrevoltaje', 'Se revisa la alimentación eléctrica de los equipos']],
+  general: ['Acciones generales', ['Se realiza visita de diagnóstico', 'Se solicita cotización a empresa externa', 'Se deriva a empresa externa / contratista', 'Se realiza mantención preventiva', 'Se repara fosa', 'Se repara cámara desgrasadora', 'Se repara juego infantil', 'Se construye o repara rampa de evacuación', 'Otra acción (explicar en el detalle del trabajo)']]
+};
+const ACCIONES_BASE = Object.entries(AREAS_ACCION).flatMap(([k, [, lista]]) =>
+  lista.map((d, i) => ({id_accion: 'AX-' + k.toUpperCase() + '-' + String(i + 1).padStart(2, '0'), area: k, descripcion: d})));
+const ACCION_OTRA = 'AX-GENERAL-' + String(AREAS_ACCION.general[1].length).padStart(2, '0');
+// Nombre que trae el área escrita en el ticket -> claves de AREAS_ACCION
+const ALIAS_AREA = {electricidad:['electricidad'], gasfiteria:['gasfiteria'], 'agua potable':['agua_potable'], climatizacion:['climatizacion'],
+  calefaccion:['calefaccion'], cerrajeria:['cerrajeria'], cubiertas:['cubiertas'], 'aguas lluvias':['aguas_lluvias','cubiertas'],
+  sanitario:['plagas','gasfiteria'], cocina:['cocina'], seguridad:['seguridad'], pintura:['pintura'],
+  ti:['ti','electricidad'], 'infraestructura general':['general'], infraestructura:['general']};
+const AREA_DE_GENERAL = {electrico:'electricidad', sanitario:'gasfiteria', techumbre:'cubiertas', vidrios:'vidrios', puertas:'puertas',
+  cerrajeria:'cerrajeria', 'cocina y casino':'cocina', mobiliario:'mobiliario', 'pisos y pavimentos':'pisos', 'muros y cielos':'muros',
+  calefaccion:'calefaccion', 'areas verdes y exteriores':'exteriores', 'seguridad y emergencia':'seguridad'};
+const nomAccion = id => (cat?.acciones||[]).find(a=>a.id_accion==id)?.descripcion
+  || ACCIONES_BASE.find(a=>a.id_accion==id)?.descripcion || id || '—';
+// Áreas del ticket: la del "[Área]" de la descripción (puede traer varias: "A / B") y la del elemento elegido
+function areasDeTicket(o) {
+  const out = [];
+  const m = String(o.descripcion || '').match(/^\s*\[([^\]]+)\]/);
+  if (m) m[1].split('/').forEach(parte => (ALIAS_AREA[normTxt(parte)] || []).forEach(k => out.push(k)));
+  const esp = (cat?.especificos || []).find(e => e.id_especifico == o.id_especifico);
+  const gen = esp && (cat?.generales || []).find(g => g.id_general == esp.id_general);
+  if (gen && AREA_DE_GENERAL[normTxt(gen.nombre)]) out.push(AREA_DE_GENERAL[normTxt(gen.nombre)]);
+  return [...new Set(out)];
+}
 function accionesDe(idEspec) {
   const a = (cat?.acciones||[]).filter(x=>x.id_especifico==idEspec);
   const otras = (cat?.acciones||[]).filter(x=>!x.id_especifico);
   return a.concat(otras);
+}
+// <option>s agrupados: lo del elemento, luego el área del ticket, luego las acciones generales y el resto de las áreas
+function opcionesAccion(o) {
+  const op = a => `<option value="${esc(a.id_accion)}">${esc(a.descripcion)}</option>`;
+  const grupo = (titulo, lista) => lista.length ? `<optgroup label="${esc(titulo)}">${lista.map(op).join('')}</optgroup>` : '';
+  const delElemento = accionesDe(o.id_especifico);
+  const areas = areasDeTicket(o).filter(k => k !== 'general');
+  const usadas = new Set(delElemento.map(a => a.id_accion));
+  let html = grupo('Del elemento del ticket', delElemento);
+  areas.forEach(k => { html += grupo('Acciones de ' + AREAS_ACCION[k][0], ACCIONES_BASE.filter(a => a.area === k)); });
+  html += grupo(AREAS_ACCION.general[0], ACCIONES_BASE.filter(a => a.area === 'general'));
+  const resto = Object.keys(AREAS_ACCION).filter(k => k !== 'general' && !areas.includes(k));
+  html += resto.map(k => grupo('Otras áreas · ' + AREAS_ACCION[k][0], ACCIONES_BASE.filter(a => a.area === k))).join('');
+  return html;
 }
 
 // ==================== LEVANTAMIENTO: wizard de 7 pasos ====================
@@ -1841,7 +1903,6 @@ function openSubsanacionModal(idLocal) {
   const o = obs.find(x=>x.id_local===idLocal);
   if (!o) return;
   subActual = idLocal; matSel = []; currentFotos.sub = [];
-  const acc = accionesDe(o.id_especifico);
   const saldo = saldoDeGestor(sesion.id_usuario);
 
   document.getElementById('modal-sub-content').innerHTML = `
@@ -1857,7 +1918,7 @@ function openSubsanacionModal(idLocal) {
     <hr class="divider">
     <div class="mb-3"><label>Acción ejecutada</label>
       <select id="sub-accion"><option value="">Selecciona la acción...</option>
-        ${acc.map(a=>`<option value="${esc(a.id_accion)}">${esc(a.descripcion)}</option>`).join('')}
+        ${opcionesAccion(o)}
       </select></div>
 
     <div class="mb-3"><label>Detalle del trabajo</label>
@@ -1930,6 +1991,7 @@ async function guardarSubsanacion() {
   if (!o) return;
   const accion = document.getElementById('sub-accion').value;
   if (!accion) { toast('⚠️ Selecciona la acción ejecutada','err'); return; }
+  if (accion === ACCION_OTRA && !document.getElementById('sub-obs').value.trim()) { toast('⚠️ Con "Otra acción" explica el trabajo en el detalle','err'); return; }
   if (!currentFotos.sub.length) { toast('⚠️ La fotografía después es obligatoria','err'); return; }
 
   const materiales = matSel.filter(m=>m.id_material && +m.cantidad>0)
