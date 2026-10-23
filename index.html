@@ -467,6 +467,29 @@
   }
   .subtab-btn.active { background:var(--accent); color:#000; border-color:var(--accent) }
   .subpanel { display:none } .subpanel.on { display:block }
+  .subtab-bar.wrap { flex-wrap:wrap; overflow-x:visible }
+  .subtab-btn.todas { background:var(--surface2); color:var(--text) }
+  .menu-opciones { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; margin-bottom:14px }
+  .menu-op { text-align:left; padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer }
+  .menu-op b { display:block; font-size:14px; margin-bottom:2px }
+  .menu-op span { font-size:12px; color:var(--muted) }
+  .menu-op:hover, .menu-op.active { border-color:var(--accent) }
+  /* Reportes · costos */
+  .rc-filtros { display:flex; flex-wrap:wrap; align-items:center; gap:8px }
+  .rc-pills { display:flex; flex-wrap:wrap; gap:6px }
+  .rc-pill { background:var(--surface2); border:1px solid var(--border); border-radius:99px; padding:3px 10px; font-size:12px; display:inline-flex; gap:6px; align-items:center }
+  .rc-pill button { border:0; background:none; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 }
+  .rc-note { color:var(--muted); font-size:11px; margin-top:2px }
+  .rc-hint { color:var(--muted); font-size:11px; font-weight:400; margin-left:6px }
+  .rc-box { position:relative; height:260px } .rc-box.rc-alto { height:420px } .rc-box.rc-bajo { height:220px }
+  .rc-scroll { overflow-x:auto } .rc-alto-scroll { max-height:420px; overflow:auto }
+  .rc-tbl { width:100%; border-collapse:collapse; font-size:12px }
+  .rc-tbl th, .rc-tbl td { padding:6px 8px; border-bottom:1px solid var(--border); text-align:right; vertical-align:top }
+  .rc-tbl th.l, .rc-tbl td.l { text-align:left } .rc-tbl th { color:var(--muted); font-size:11px; text-transform:uppercase }
+  .rc-tbl tbody tr[data-k] { cursor:pointer } .rc-tbl tbody tr.sel td { background:var(--surface2); font-weight:700 }
+  .rc-tbl tfoot td { font-weight:700; border-top:2px solid var(--border) }
+  .rc-emerg { color:var(--danger); font-weight:700 }
+  .rc-bar { height:8px; background:var(--accent); border-radius:2px; display:inline-block; vertical-align:middle; margin-left:6px }
 
   /* Inventario: fila de item con stock */
   .inv-row {
@@ -584,7 +607,7 @@
     <button class="tab-btn" id="tab-cajachica" onclick="showTab('cajachica')">🧾 Caja Chica</button>
     <button class="tab-btn" id="tab-registros" onclick="showTab('registros')">Tickets</button>
     <button class="tab-btn" id="tab-gestion" onclick="showTab('gestion')">Gestión</button>
-    <button class="tab-btn" id="tab-seguimiento" onclick="showTab('seguimiento')">📈 Seguimiento</button>
+    <button class="tab-btn" id="tab-reportes" onclick="showTab('reportes')">📊 Reportes</button>
   </div>
 
   <main>
@@ -852,17 +875,17 @@
 
     <!-- ---------- GESTIÓN Y CONTROL (Módulo 5, exclusivo Infraestructura) ---------- -->
     <div id="tab-content-gestion" style="display:none">
-      <div class="subtab-bar" id="gestion-subtabs">
+      <div class="subtab-bar wrap" id="gestion-subtabs">
+        <button class="subtab-btn todas" id="ges-todas-btn" onclick="toggleMenuGestion()">☰ Todas las opciones</button>
         <button class="subtab-btn active" data-sp="ges-bandeja" onclick="showSub('gestion','ges-bandeja')">📥 Bandeja</button>
         <button class="subtab-btn" data-sp="ges-validacion" onclick="showSub('gestion','ges-validacion')">✅ Validar cierres</button>
         <button class="subtab-btn" data-sp="ges-oc" onclick="showSub('gestion','ges-oc')">🏗️ Empresas / OC</button>
         <button class="subtab-btn" data-sp="ges-admin" onclick="showSub('gestion','ges-admin')">⚙️ Administración</button>
-        <button class="subtab-btn" data-sp="ges-reportes" onclick="showSub('gestion','ges-reportes')">📊 Reportería</button>
-        <button class="subtab-btn" data-sp="ges-analitica" onclick="showSub('gestion','ges-analitica')">🤖 Analítica IA</button>
         <button class="subtab-btn" data-sp="ges-asignaciones" onclick="showSub('gestion','ges-asignaciones')">🧭 Asignaciones</button>
         <button class="subtab-btn" data-sp="ges-rutas" onclick="showSub('gestion','ges-rutas')">🗺️ Rutas</button>
         <button class="subtab-btn" data-sp="ges-fotos" onclick="showSub('gestion','ges-fotos')">📷 Fotos</button>
       </div>
+      <div id="gestion-menu" class="menu-opciones" style="display:none"></div>
 
       <!-- Bandeja de observaciones (toda la red) -->
       <div class="subpanel on" id="ges-bandeja">
@@ -932,92 +955,9 @@
         </div>
       </div>
 
-      <!-- Reportería -->
-      <div class="subpanel" id="ges-reportes">
-        <div class="card mb-3">
-          <div class="card-title mb-3">📋 Reporte de mantención por colegio</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
-            Genera el detalle de mantención de un establecimiento en un rango de fechas —
-            trabajos subsanados (con acción, materiales usados y foto de después) y,
-            opcionalmente, los que aún están pendientes.</p>
-          <div class="grid-2 mb-3">
-            <div><label>Comuna</label><select id="rpc-comuna" onchange="poblarSelectColegios('rpc-estab', this.value)"></select></div>
-            <div><label>Establecimiento</label><select id="rpc-estab"><option value="">Elige una comuna primero</option></select></div>
-          </div>
-          <div class="grid-2 mb-3">
-            <div><label>Desde</label><input type="date" id="rpc-desde"></div>
-            <div><label>Hasta</label><input type="date" id="rpc-hasta"></div>
-          </div>
-          <label class="flex" style="align-items:center;gap:8px;margin-bottom:12px">
-            <input type="checkbox" id="rpc-pendientes" style="width:auto">
-            <span style="font-size:13px">Incluir pendientes (no solo subsanados)</span>
-          </label>
-          <div class="grid-2 mb-3">
-            <div><label>Profesional responsable</label><input type="text" id="rpc-profesional" placeholder="Nombre completo"></div>
-            <div><label>Cargo / especialidad</label><input type="text" id="rpc-cargo" placeholder="Se sugiere según el tipo de falla"></div>
-          </div>
-          <button class="btn btn-primary mb-3" onclick="generarReporteColegio()">📄 Generar reporte</button>
-          <div id="rpc-resumen"></div>
-          <div id="rpc-acciones" style="display:none">
-            <button class="btn btn-primary mb-3" onclick="exportarReporteColegioExcel()">⬇️ Descargar Excel</button>
-            <button class="btn btn-ghost" onclick="exportarReporteColegioPDF()">📎 Adjuntar / Vista para PDF</button>
-          </div>
-        </div>
-        <div class="card mb-3">
-          <div class="card-title mb-3">Exportar reporte de la red</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
-            Genera un Excel con pendientes por comuna y establecimiento, costo y consumo de materiales,
-            herramientas por gestor, tiempos de respuesta y bitácora de emergencias.</p>
-          <button class="btn btn-primary mb-3" onclick="exportarReporteExcel()">⬇️ Descargar Excel</button>
-          <button class="btn btn-ghost" onclick="exportarReportePDF()">🖨️ Vista para PDF</button>
-        </div>
-        <div class="card">
-          <div class="card-title mb-3">Resumen</div>
-          <div id="ges-reporte-resumen"></div>
-        </div>
-      </div>
+      
 
-      <!-- Analítica IA -->
-      <div class="subpanel" id="ges-analitica">
-        <div id="ia-empty">
-          <div class="card mb-3">
-            <div class="card-title">Smart Analytics Hub &amp; AI Agent</div>
-            <p style="font-size:12px;color:var(--muted);margin:4px 0 14px">Tablero inteligente de control y asistente virtual de datos, integrado a LevantApp.</p>
-            <div class="dz" id="ia-dropzone" onclick="document.getElementById('ia-file').click()">
-              <div style="font-size:34px">📊</div>
-              <p style="font-weight:700;margin-top:8px">Suelta o toca para subir un Excel</p>
-              <p style="font-size:11px;color:var(--muted);margin-top:4px">.xlsx o .xls — cualquier planilla con datos de la red</p>
-            </div>
-            <input type="file" id="ia-file" accept=".xlsx,.xls" style="display:none" onchange="iaCargarArchivo(this.files[0])">
-            <button class="btn btn-ghost mt-3" onclick="iaCargarDesdeReporteria()">📥 Cargar desde Reportería</button>
-          </div>
-        </div>
-        <div id="ia-dashboard" style="display:none">
-          <div class="flex mb-3" style="justify-content:space-between;align-items:center">
-            <span id="ia-filename" class="mono" style="font-size:11px;color:var(--muted)"></span>
-            <button class="btn-icon" onclick="iaReset()" title="Cargar otro archivo">🔄</button>
-          </div>
-          <div class="grid-2 mb-3" id="ia-filtros"></div>
-          <div class="kpi-grid" id="ia-kpis"></div>
-          <div class="card mb-3"><div class="card-title" id="ia-chart1-title">Distribución</div><canvas id="ia-chart1" height="180"></canvas></div>
-          <div class="card mb-3"><div class="card-title" id="ia-chart2-title">Evolución</div><canvas id="ia-chart2" height="180"></canvas></div>
-          <div class="card mb-3">
-            <div class="card-title">🤖 DataBot AI <span id="ia-status" style="font-weight:400;color:var(--ok);font-size:11px">● en línea</span></div>
-            <div id="ia-suggest" class="mb-3"></div>
-            <div class="chat-wrap">
-              <div class="chat-msgs" id="ia-chat"></div>
-              <div class="chat-input-row">
-                <input type="text" id="ia-input" placeholder="Pregúntale a DataBot..." onkeydown="if(event.key==='Enter')iaEnviar()">
-                <button class="btn btn-primary btn-sm" style="width:auto" onclick="iaEnviar()">➤</button>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Datos filtrados</div>
-            <div style="overflow-x:auto"><table id="ia-tabla" class="mono" style="width:100%;font-size:11px;border-collapse:collapse"></table></div>
-          </div>
-        </div>
-      </div>
+      
 
       <!-- Asignaciones (Módulo 7 · Coordinación): qué colegio(s) atiende cada Maestro/Director -->
       <div class="subpanel" id="ges-asignaciones">
@@ -1096,8 +1036,58 @@
       </div>
     </div>
 
-    <!-- ---------- SEGUIMIENTO (Módulo 7, exclusivo Infraestructura) ---------- -->
-    <div id="tab-content-seguimiento" style="display:none">
+    <!-- ---------- REPORTES (todo lo de reportería en una sola pestaña; exclusivo Infraestructura) ---------- -->
+    <div id="tab-content-reportes" style="display:none">
+      <div class="subtab-bar wrap" id="reportes-subtabs">
+        <button class="subtab-btn active" data-sp="rep-costos" onclick="showSub('reportes','rep-costos')">💲 Costos</button>
+        <button class="subtab-btn" data-sp="rep-seguimiento" onclick="showSub('reportes','rep-seguimiento')">📈 Seguimiento</button>
+        <button class="subtab-btn" data-sp="rep-informes" onclick="showSub('reportes','rep-informes')">📋 Informes por colegio</button>
+        <button class="subtab-btn" data-sp="rep-ia" onclick="showSub('reportes','rep-ia')">🤖 Analítica IA</button>
+      </div>
+
+      <!-- Costos: cotización referencial (tablero con filtros cruzados) -->
+      <div class="subpanel on" id="rep-costos">
+        <div class="card mb-3">
+          <div class="card-title mb-3">💲 Costos de mantención e infraestructura</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            Cotización referencial en CLP, emitida el 23-10-2026. Toca una barra, un segmento o una fila para filtrar todo el tablero.</p>
+          <div class="rc-filtros"><span style="font-size:12px;color:var(--muted)">Filtros activos:</span>
+            <div id="rc-pills" class="rc-pills"></div>
+            <button class="btn btn-ghost btn-sm" onclick="rcLimpiar()">Limpiar filtros</button></div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-lbl">Costo neto directo</div><div class="kpi-val" id="rc-kpi-neto">–</div><div class="rc-note">Sin gastos generales, imprevistos ni IVA</div></div>
+          <div class="kpi-card"><div class="kpi-lbl">Total estimado con IVA</div><div class="kpi-val" id="rc-kpi-total">–</div><div class="rc-note">Incluye 25% de gastos generales, utilidades e imprevistos, y IVA 19%</div></div>
+          <div class="kpi-card"><div class="kpi-lbl">Líneas cotizadas</div><div class="kpi-val" id="rc-kpi-lineas">–</div></div>
+          <div class="kpi-card"><div class="kpi-lbl">Emergencias por lluvia</div><div class="kpi-val" id="rc-kpi-emerg" style="color:var(--danger)">–</div></div>
+        </div>
+        <div class="card mb-3"><div class="card-title mb-3">Costo total con IVA por establecimiento</div><div class="rc-box rc-alto"><canvas id="rc-c-est"></canvas></div></div>
+        <div class="card mb-3"><div class="card-title mb-3">Costo neto por especialidad</div><div class="rc-box"><canvas id="rc-c-esp"></canvas></div></div>
+        <div class="card mb-3"><div class="card-title mb-3">Costo por mes de ingreso <span class="rc-hint">"Sin fecha" = sin fecha de solicitud</span></div><div class="rc-box rc-bajo"><canvas id="rc-c-mes"></canvas></div></div>
+        <div class="grid-2 mb-3">
+          <div class="card"><div class="card-title mb-3">Por prioridad</div><div class="rc-box rc-bajo"><canvas id="rc-c-prio"></canvas></div></div>
+          <div class="card"><div class="card-title mb-3">Por tipo de solicitud</div><div class="rc-box rc-bajo"><canvas id="rc-c-tipo"></canvas></div></div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-title mb-3">Resumen por establecimiento <span class="rc-hint">toca una fila para filtrar</span></div>
+          <div class="rc-scroll"><table class="rc-tbl">
+            <thead><tr><th class="l">Establecimiento</th><th class="l">RBD</th><th>Líneas</th><th>Emerg.</th><th>Neto directo</th><th>Total con IVA</th><th>Part.</th></tr></thead>
+            <tbody id="rc-tbody"></tbody><tfoot id="rc-tfoot"></tfoot></table></div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-title mb-3">Detalle de cotización <span class="rc-hint">según los filtros activos</span></div>
+          <div class="rc-scroll rc-alto-scroll"><table class="rc-tbl">
+            <thead><tr><th class="l">N°</th><th class="l">Establecimiento</th><th class="l">Especialidad</th><th class="l">Prioridad</th><th class="l">Requerimiento</th><th>Cantidad</th><th>Neto directo</th><th>Total con IVA</th><th>Plazo (días)</th></tr></thead>
+            <tbody id="rc-tbody-det"></tbody></table></div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+          Valores referenciales en CLP, netos de IVA salvo indicación, basados en precios de mercado. No constituyen oferta formal y deben confirmarse en visita técnica.
+          Total con IVA = neto directo × 1,4875 (gastos generales y utilidades 15%, imprevistos 10%, IVA 19%).
+          Los generadores de Escuela Quillaileo incluyen solo instalación. Posibles duplicidades (tragaluces en Lloveras y acceso de cocina en Quillaileo) están señaladas para validar.</p>
+      </div>
+
+      <!-- Seguimiento -->
+      <div class="subpanel" id="rep-seguimiento">
       <div class="card mb-3">
         <div class="card-title mb-3">📈 Seguimiento y control de gestión</div>
         <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
@@ -1141,6 +1131,94 @@
       <div class="card">
         <div class="card-title mb-3">Detalle por establecimiento</div>
         <div id="seg-tabla" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
+      <!-- Informes por colegio -->
+      <div class="subpanel" id="rep-informes">
+        <div class="card mb-3">
+          <div class="card-title mb-3">📋 Reporte de mantención por colegio</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Genera el detalle de mantención de un establecimiento en un rango de fechas —
+            trabajos subsanados (con acción, materiales usados y foto de después) y,
+            opcionalmente, los que aún están pendientes.</p>
+          <div class="grid-2 mb-3">
+            <div><label>Comuna</label><select id="rpc-comuna" onchange="poblarSelectColegios('rpc-estab', this.value)"></select></div>
+            <div><label>Establecimiento</label><select id="rpc-estab"><option value="">Elige una comuna primero</option></select></div>
+          </div>
+          <div class="grid-2 mb-3">
+            <div><label>Desde</label><input type="date" id="rpc-desde"></div>
+            <div><label>Hasta</label><input type="date" id="rpc-hasta"></div>
+          </div>
+          <label class="flex" style="align-items:center;gap:8px;margin-bottom:12px">
+            <input type="checkbox" id="rpc-pendientes" style="width:auto">
+            <span style="font-size:13px">Incluir pendientes (no solo subsanados)</span>
+          </label>
+          <div class="grid-2 mb-3">
+            <div><label>Profesional responsable</label><input type="text" id="rpc-profesional" placeholder="Nombre completo"></div>
+            <div><label>Cargo / especialidad</label><input type="text" id="rpc-cargo" placeholder="Se sugiere según el tipo de falla"></div>
+          </div>
+          <button class="btn btn-primary mb-3" onclick="generarReporteColegio()">📄 Generar reporte</button>
+          <div id="rpc-resumen"></div>
+          <div id="rpc-acciones" style="display:none">
+            <button class="btn btn-primary mb-3" onclick="exportarReporteColegioExcel()">⬇️ Descargar Excel</button>
+            <button class="btn btn-ghost" onclick="exportarReporteColegioPDF()">📎 Adjuntar / Vista para PDF</button>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-title mb-3">Exportar reporte de la red</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Genera un Excel con pendientes por comuna y establecimiento, costo y consumo de materiales,
+            herramientas por gestor, tiempos de respuesta y bitácora de emergencias.</p>
+          <button class="btn btn-primary mb-3" onclick="exportarReporteExcel()">⬇️ Descargar Excel</button>
+          <button class="btn btn-ghost" onclick="exportarReportePDF()">🖨️ Vista para PDF</button>
+        </div>
+        <div class="card">
+          <div class="card-title mb-3">Resumen</div>
+          <div id="ges-reporte-resumen"></div>
+        </div>
+      </div>
+
+      <!-- Analítica IA -->
+      <div class="subpanel" id="rep-ia">
+        <div id="ia-empty">
+          <div class="card mb-3">
+            <div class="card-title">Smart Analytics Hub &amp; AI Agent</div>
+            <p style="font-size:12px;color:var(--muted);margin:4px 0 14px">Tablero inteligente de control y asistente virtual de datos, integrado a LevantApp.</p>
+            <div class="dz" id="ia-dropzone" onclick="document.getElementById('ia-file').click()">
+              <div style="font-size:34px">📊</div>
+              <p style="font-weight:700;margin-top:8px">Suelta o toca para subir un Excel</p>
+              <p style="font-size:11px;color:var(--muted);margin-top:4px">.xlsx o .xls — cualquier planilla con datos de la red</p>
+            </div>
+            <input type="file" id="ia-file" accept=".xlsx,.xls" style="display:none" onchange="iaCargarArchivo(this.files[0])">
+            <button class="btn btn-ghost mt-3" onclick="iaCargarDesdeReporteria()">📥 Cargar desde Reportería</button>
+          </div>
+        </div>
+        <div id="ia-dashboard" style="display:none">
+          <div class="flex mb-3" style="justify-content:space-between;align-items:center">
+            <span id="ia-filename" class="mono" style="font-size:11px;color:var(--muted)"></span>
+            <button class="btn-icon" onclick="iaReset()" title="Cargar otro archivo">🔄</button>
+          </div>
+          <div class="grid-2 mb-3" id="ia-filtros"></div>
+          <div class="kpi-grid" id="ia-kpis"></div>
+          <div class="card mb-3"><div class="card-title" id="ia-chart1-title">Distribución</div><canvas id="ia-chart1" height="180"></canvas></div>
+          <div class="card mb-3"><div class="card-title" id="ia-chart2-title">Evolución</div><canvas id="ia-chart2" height="180"></canvas></div>
+          <div class="card mb-3">
+            <div class="card-title">🤖 DataBot AI <span id="ia-status" style="font-weight:400;color:var(--ok);font-size:11px">● en línea</span></div>
+            <div id="ia-suggest" class="mb-3"></div>
+            <div class="chat-wrap">
+              <div class="chat-msgs" id="ia-chat"></div>
+              <div class="chat-input-row">
+                <input type="text" id="ia-input" placeholder="Pregúntale a DataBot..." onkeydown="if(event.key==='Enter')iaEnviar()">
+                <button class="btn btn-primary btn-sm" style="width:auto" onclick="iaEnviar()">➤</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Datos filtrados</div>
+            <div style="overflow-x:auto"><table id="ia-tabla" class="mono" style="width:100%;font-size:11px;border-collapse:collapse"></table></div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -1346,8 +1424,8 @@ function entrarApp() {
   const SUBTABS_COORDINADOR = ['ges-asignaciones','ges-rutas','ges-fotos'];
   document.querySelectorAll('#gestion-subtabs .subtab-btn')
     .forEach(b => b.style.display = p==='Coordinador' && !SUBTABS_COORDINADOR.includes(b.dataset.sp) ? 'none' : '');
-  // Seguimiento (Módulo 7): tablero de control, exclusivo Infraestructura
-  document.getElementById('tab-seguimiento').style.display = p==='Infraestructura' ? '' : 'none';
+  // Reportes (costos, seguimiento, informes por colegio y analítica IA en una sola pestaña): exclusivo Infraestructura
+  document.getElementById('tab-reportes').style.display = p==='Infraestructura' ? '' : 'none';
   if (p!=='Bodega' && p!=='Coordinador') iniciarLevantamiento();
   refrescarTodo();
   if (navigator.onLine) sincronizarTodo(true);
@@ -2436,12 +2514,177 @@ function pintarCola() {
 
 setInterval(()=>{ if(navigator.onLine && cola.length && sesion) sincronizarTodo(true); }, 30000);
 
+// ==================== REPORTES · COSTOS (cotización referencial) ====================
+// Datos de la hoja "Detalle Cotización" del informe de costos del 23-10-2026.
+// [N°, RBD, Establecimiento, Fecha solicitud, Área / especialidad, Requerimiento, Prioridad, Cantidad, Unidad, Precio unitario, Plazo (días), Observaciones]
+const RC_RAW = [
+  [1,"4353-2","Liceo Cardenal Antonio Samoré","2026-10-23","Cubiertas / Emergencia lluvia","Goteras en la sala de profesores por gran cantidad de agua caída en corto período.","Alta",1,"gl",280000,7,"Sellado y reparación localizada; revisar canaletas."],
+  [2,"17813-6","Escuela Básica Cacique Levián","","Gasfitería","Instalar un lavamanos.","Media",1,"un",85000,30,"Incluye artefacto, grifería y conexiones."],
+  [3,"17813-6","Escuela Básica Cacique Levián","","Estructura / Cubiertas","Reparar techumbres y goteras en el patio.","Alta",30,"m²",15000,7,"Superficie estimada; confirmar en terreno."],
+  [4,"17813-6","Escuela Básica Cacique Levián","","Aseo y ornato","Retirar escombros y realizar poda de árboles.","Baja",1,"gl",380000,60,"Incluye retiro y disposición final."],
+  [5,"17813-6","Escuela Básica Cacique Levián","2026-10-23","Cubiertas / Emergencia lluvia","Gotera en la ampliación de la biblioteca por gran cantidad de agua caída en corto período.","Alta",1,"gl",250000,7,"Reparación de emergencia y sellado."],
+  [6,"4352-4","Colegio Artístico Lloveras","","Electricidad","Cambiar luces piloto en tableros eléctricos.","Media",6,"un",18000,30,"Cantidad estimada; incluye mano de obra."],
+  [7,"4352-4","Colegio Artístico Lloveras","","Gasfitería","Reparar lavamanos en baños de hombres y mujeres; cambio de sistema de desagüe en lavamanos de hombres y mujeres.","Media",4,"un",35000,30,"Cantidad estimada de artefactos."],
+  [8,"4352-4","Colegio Artístico Lloveras","","Estructura / Cubiertas","Reemplazar 100 tragaluces en mal estado.","Media",100,"un",45000,30,"Suministro e instalación con sellado. Posible duplicidad con el cambio de tragaluz (N° 9 del catastro); validar."],
+  [9,"4352-4","Colegio Artístico Lloveras","","Gasfitería","Reparar fuga de agua en llave de estanques.","Media",1,"un",40000,30,""],
+  [10,"4352-4","Colegio Artístico Lloveras","","Aseo y ornato","Corte de pasto.","Baja",1,"gl",180000,60,"Superficie por confirmar."],
+  [11,"4352-4","Colegio Artístico Lloveras","","Aseo y ornato","Poda.","Baja",1,"gl",250000,60,"Incluye retiro de ramas."],
+  [12,"4352-4","Colegio Artístico Lloveras","","Gasfitería","Instalar sifón en lavamanos.","Media",4,"un",12000,30,"Cantidad estimada."],
+  [13,"4352-4","Colegio Artístico Lloveras","","Estructura","Cambiar recubierta de lavamanos.","Baja",4,"un",55000,60,"Cantidad estimada."],
+  [14,"4352-4","Colegio Artístico Lloveras","2026-10-23","Cubiertas / Emergencia lluvia","Goteras en pasillos interiores por gran cantidad de agua caída en corto período.","Alta",1,"gl",320000,7,"Reparación de emergencia y sellado."],
+  [15,"4355-9","Escuela de Educación General Básica El Huachi","","Cubiertas y estructura","Revisar y reparar goteras.","Alta",1,"gl",350000,7,""],
+  [16,"4355-9","Escuela de Educación General Básica El Huachi","","Cubiertas y estructura","Cambiar cubiertas / planchas con problemas de filtración de agua.","Alta",40,"m²",14000,7,"Superficie estimada; confirmar en terreno."],
+  [17,"4355-9","Escuela de Educación General Básica El Huachi","2026-10-23","Cubiertas / Emergencia lluvia","Goteras en el patio techado y en dependencias de dirección por gran cantidad de agua caída en corto período.","Alta",1,"gl",420000,7,"Reparación de emergencia y sellado."],
+  [18,"4357-5","Escuela Básica Villacura","2026-07-30","Electricidad","Revisión de instalación eléctrica para habilitación de sala de computación.","Media",1,"gl",180000,30,"Diagnóstico y ajustes menores; no incluye obras mayores."],
+  [19,"4357-5","Escuela Básica Villacura","2026-09-03","Climatización / Infraestructura","Limpieza de cañones de estufas.","Alta",1,"gl",150000,7,"Riesgo por combustión; priorizar limpieza."],
+  [20,"4357-5","Escuela Básica Villacura","","Cubiertas / Climatización","Revisión de canaletas y estufa con filtración.","Media",1,"gl",220000,30,""],
+  [21,"4358-3","Escuela Mariano Puga Vega","2026-08-05","Electricidad / Cubiertas","Goteras y fallas eléctricas en nivel parvulario.","Alta",1,"gl",380000,7,"Incluye reparación de cubierta y diagnóstico eléctrico."],
+  [22,"4358-3","Escuela Mariano Puga Vega","2026-08-26","Climatización","Equipos de calefacción y aire acondicionado fuera de servicio.","Media",1,"gl",450000,30,"Diagnóstico y reparación; no incluye reposición de equipos."],
+  [23,"4358-3","Escuela Mariano Puga Vega","2026-08-26","Cubiertas","Revisión de techo.","Media",1,"gl",200000,30,"Parte de la solicitud del 26-08-2026."],
+  [24,"4358-3","Escuela Mariano Puga Vega","2026-10-23","Cubiertas / Emergencia lluvia","Gotera en el jardín infantil por gran cantidad de agua caída en corto período.","Alta",1,"gl",260000,7,"Reparación de emergencia y sellado."],
+  [25,"4359-1","Escuela Básica Mañil","","Cerrajería","Cambio de chapa de puerta principal.","Media",1,"un",65000,30,"Incluye suministro e instalación."],
+  [26,"4361-3","Escuela Básica Corcovado","","Electricidad","Instalar red y alimentadores eléctricos para la sala de computación.","Media",1,"gl",1200000,30,"Canalización, cableado y protecciones."],
+  [27,"4361-3","Escuela Básica Corcovado","","Cubiertas / Hojalatería","Instalar 26 mt de canaletas (falta soporte de canaleta).","Media",26,"ml",14000,30,"Incluye soportes."],
+  [28,"4361-3","Escuela Básica Corcovado","","Aseo / Poda / Equipamiento","Talar 2 eucaliptus (faltan cuñas y motosierra con hoja más grande).","Media",2,"un",280000,30,"Incluye faena y retiro; considera equipo adecuado."],
+  [29,"4365-6","Escuela Rinconada","2026-08-04","Gasfitería","Reparación de urinario.","Media",1,"un",85000,30,"Parte de la solicitud del 04-08-2026."],
+  [30,"4365-6","Escuela Rinconada","","Gasfitería","Revisar y reparar / reemplazar llaves de agua defectuosas.","Media",6,"un",22000,30,"Cantidad estimada."],
+  [31,"4368-0","Escuela Los Notros","","Gasfitería","Arreglar llave de jardín con gotera.","Baja",1,"un",25000,60,""],
+  [32,"4368-0","Escuela Los Notros","","Electricidad","Cambiar 10 luces halógenas por plafones.","Media",10,"un",14000,30,"Suministro e instalación."],
+  [33,"4368-0","Escuela Los Notros","","Aseo y ornato","Cortar el pasto.","Baja",1,"gl",150000,60,"Superficie por confirmar."],
+  [34,"4368-0","Escuela Los Notros","2026-10-23","Cubiertas / Emergencia lluvia","Goteras en ventanas por gran cantidad de agua caída en corto período.","Alta",1,"gl",280000,7,"Sellado de ventanas."],
+  [35,"4368-0","Escuela Los Notros","2026-10-23","Estructura / Emergencia lluvia","Desprendimiento de marco y puerta del gimnasio.","Alta",1,"gl",380000,7,"Reposición de marco y puerta; riesgo de seguridad."],
+  [36,"4372-9","Escuela Quillaileo","","Gasfitería","Realizar mejora integral a la toma de agua de la red.","Alta",1,"gl",1500000,7,"Incluye materiales y obras de conexión."],
+  [37,"4372-9","Escuela Quillaileo","","Gasfitería","Reparar conductos de agua principales que abastecen el recinto.","Alta",40,"ml",18000,7,"Longitud estimada; confirmar en terreno."],
+  [38,"4372-9","Escuela Quillaileo","","Estructura / Cubiertas","Reparar techumbre.","Alta",60,"m²",16000,7,"Superficie estimada; confirmar en terreno."],
+  [39,"4372-9","Escuela Quillaileo","","Estructura","Reparar y sellar adecuadamente la sala del inspector.","Media",1,"gl",450000,30,""],
+  [40,"4372-9","Escuela Quillaileo","","Estructura","Construir / reparar escalera de acceso.","Alta",1,"gl",900000,7,"Riesgo de caídas; priorizar."],
+  [41,"4372-9","Escuela Quillaileo","","Estructura","Cambiar paneles rotos en muros / divisiones.","Media",12,"un",38000,30,"Cantidad estimada."],
+  [42,"4372-9","Escuela Quillaileo","","Electricidad / Equipamiento","Realizar canalización e instalación eléctrica para grupo electrógeno.","Media",1,"gl",850000,30,"Incluye tablero de transferencia."],
+  [43,"4372-9","Escuela Quillaileo","","Equipamiento","Adquirir batería para el generador.","Media",1,"un",120000,30,""],
+  [44,"4372-9","Escuela Quillaileo","","Electricidad / Equipamiento","Posicionar e instalar generador principal que alimenta al sector de estudiantes.","Media",1,"gl",1200000,30,"Solo instalación; no incluye suministro del equipo."],
+  [45,"4372-9","Escuela Quillaileo","","Electricidad / Equipamiento","Instalar segundo generador en el sector de internado.","Media",1,"gl",1200000,30,"Solo instalación; no incluye suministro del equipo."],
+  [46,"4372-9","Escuela Quillaileo","2026-10-23","Estructura / Carpintería / Cubiertas","Mejorar entrada de cocina en JUNAEV por entrada de agua y madera podrida.","Media",1,"gl",650000,30,"Posible duplicidad con reparación de acceso de cocina; validar."],
+  [47,"34550-4","Mis Primeros Pasos","2026-10-23","Cubiertas / Canaletas / Emergencia lluvia","Gotera en sector cocina (posible rebalse de canaleta por volumen de agua).","Alta",1,"gl",240000,7,"Incluye limpieza y revisión de canaleta."],
+  [48,"—","Ronda de Niños y Niñas","","Estructura / Toldos","Instalación de toldos.","Media",1,"gl",1500000,30,"Superficie y número de toldos por definir en terreno."],
+  [49,"—","Ronda de Niños y Niñas","","Cubiertas / Hojalatería","Instalar 17 metros de canaleta.","Media",17,"ml",14000,30,"Incluye soportes."],
+  [50,"—","Ronda de Niños y Niñas","","Cerrajería","Instalación de chapa en cocina.","Media",1,"un",65000,30,"Incluye suministro e instalación."],
+  [51,"—","Ronda de Niños y Niñas","","Aseo y ornato","Retiro de ramas.","Baja",1,"gl",150000,60,"Incluye retiro y disposición final."]
+];
+const RC_FACTOR_TOTAL = 1 + 0.25 + 0.19 * (1 + 0.25);   // gastos generales 15% + imprevistos 10%, luego IVA 19% = 1,4875
+const RC_MES = {'07':'Jul','08':'Ago','09':'Sep','10':'Oct'};
+const RC_MESES = ['Jul','Ago','Sep','Oct','Sin fecha'];
+const RC_PRIOS = ['Alta','Media','Baja'];
+const RC_PRIO_COL = {Alta:'#e15759', Media:'#f28e2b', Baja:'#59a14f'};
+const RC_TIPOS = ['Regular','Emergencia por lluvia'];
+function rcEspecialidad(area) {
+  const t = area.split('/')[0].trim().toLowerCase();
+  if (t.startsWith('electric')) return 'Electricidad';
+  if (t.startsWith('gasfit')) return 'Gasfitería';
+  if (t.startsWith('cubiert') || t.startsWith('estructura')) return 'Cubiertas y estructura';
+  if (t.startsWith('aseo')) return 'Aseo y ornato';
+  if (t.startsWith('cerraj')) return 'Cerrajería';
+  if (t.startsWith('obras')) return 'Obras civiles';
+  if (t.startsWith('climat')) return 'Climatización';
+  if (t.startsWith('equipam')) return 'Equipamiento';
+  if (t.startsWith('carpint')) return 'Carpintería';
+  return 'Otros';
+}
+const RC_LINEAS = RC_RAW.map(([n, rbd, est, fecha, area, req, prio, cant, unidad, precio, plazo, obs]) => {
+  const emerg = /Emergencia/i.test(area), neto = cant * precio;
+  return {n, rbd, est, fecha, mes: RC_MES[(fecha || '').slice(5, 7)] || 'Sin fecha', area, esp: rcEspecialidad(area), emerg,
+          tipo: emerg ? 'Emergencia por lluvia' : 'Regular', req, prio, cant, unidad, neto, total: neto * RC_FACTOR_TOTAL, plazo, obs};
+});
+const rcSumBy = key => { const o = {}; RC_LINEAS.forEach(s => o[key(s)] = (o[key(s)] || 0) + s.neto); return o; };
+const RC_EST_ORDER = (() => { const t = rcSumBy(s => s.est); return Object.keys(t).sort((a, b) => t[b] - t[a]); })();
+const RC_ESP_ORDER = (() => { const t = rcSumBy(s => s.esp); return Object.keys(t).sort((a, b) => t[b] - t[a]); })();
+const RC_RBD = {}; RC_LINEAS.forEach(s => { if (!RC_RBD[s.est] || RC_RBD[s.est] === '—') RC_RBD[s.est] = s.rbd; });
+const rcSel = {est: null, esp: null, mes: null, prio: null, tipo: null};
+const RC_DIM = {est: s => s.est, esp: s => s.esp, mes: s => s.mes, prio: s => s.prio, tipo: s => s.tipo};
+const RC_LABEL = {est: 'Establecimiento', esp: 'Especialidad', mes: 'Mes', prio: 'Prioridad', tipo: 'Tipo'};
+const rcClp = new Intl.NumberFormat('es-CL', {style: 'currency', currency: 'CLP', maximumFractionDigits: 0});
+const rcM = v => Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(1).replace('.', ',') + ' M$' : (v / 1e3).toFixed(0) + ' k$';
+const rcPct = (a, b) => b ? (100 * a / b).toFixed(1) + '%' : '0%';
+const rcFilt = excluir => RC_LINEAS.filter(s => Object.keys(rcSel).every(k => k === excluir || rcSel[k] === null || RC_DIM[k](s) === rcSel[k]));
+function rcAgg(data, keyFn) {
+  const o = {};
+  data.forEach(s => { const k = keyFn(s); (o[k] = o[k] || {n: 0, neto: 0, total: 0, emerg: 0}); o[k].n++; o[k].neto += s.neto; o[k].total += s.total; if (s.emerg) o[k].emerg++; });
+  return o;
+}
+function rcToggle(dim, val) { rcSel[dim] = rcSel[dim] === val ? null : val; pintarCostos(); }
+function rcLimpiar() { Object.keys(rcSel).forEach(k => rcSel[k] = null); pintarCostos(); }
+const rcCss = v => getComputedStyle(document.body).getPropertyValue(v).trim();
+const rcDim = (color, activo, esSel) => (!activo || esSel) ? color : color + '40';
+let rcCharts = null, rcTema = null;
+function rcCrear() {
+  const tip = c => ' ' + rcClp.format(Math.round(c.raw));
+  const base = {responsive: true, maintainAspectRatio: false, animation: {duration: 200}, plugins: {legend: {display: false}, tooltip: {callbacks: {label: tip}}}};
+  const mk = (id, type, labels, extra) => new Chart(document.getElementById(id), {type, data: {labels, datasets: [{data: [], backgroundColor: [], borderRadius: type === 'bar' ? 2 : 0, borderWidth: type === 'bar' ? 0 : 2}]}, options: Object.assign({}, base, extra)});
+  const dona = (dim, orden) => ({cutout: '55%', plugins: {legend: {display: true, position: 'bottom', labels: {boxWidth: 12, font: {size: 11}}, onClick: (e, it) => rcToggle(dim, orden[it.index])}, tooltip: {callbacks: {label: c => c.label + ': ' + rcClp.format(Math.round(c.raw))}}}, onClick: (e, els) => { if (els.length) rcToggle(dim, orden[els[0].index]); }});
+  rcCharts = {
+    est: mk('rc-c-est', 'bar', RC_EST_ORDER, {indexAxis: 'y', onClick: (e, els) => { if (els.length) rcToggle('est', RC_EST_ORDER[els[0].index]); }}),
+    esp: mk('rc-c-esp', 'bar', RC_ESP_ORDER, {indexAxis: 'y', plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => ' Neto: ' + rcClp.format(Math.round(c.raw))}}}, onClick: (e, els) => { if (els.length) rcToggle('esp', RC_ESP_ORDER[els[0].index]); }}),
+    mes: mk('rc-c-mes', 'bar', RC_MESES, {onClick: (e, els) => { if (els.length) rcToggle('mes', RC_MESES[els[0].index]); }}),
+    prio: mk('rc-c-prio', 'doughnut', RC_PRIOS, dona('prio', RC_PRIOS)),
+    tipo: mk('rc-c-tipo', 'doughnut', RC_TIPOS, dona('tipo', RC_TIPOS))
+  };
+}
+function pintarCostos() {
+  if (typeof Chart === 'undefined') { toast('⚠️ Sin conexión: no se pudo cargar el motor de gráficos', 'err'); }
+  else {
+    if (rcCharts && rcTema !== isDark) { Object.values(rcCharts).forEach(c => c.destroy()); rcCharts = null; }   // para que tome los colores del tema
+    if (!rcCharts) { rcCrear(); rcTema = isDark; }
+    const txt = rcCss('--muted'), grid = rcCss('--border'), ac = '#4e79a7';
+    Chart.defaults.color = txt;
+    const ejes = (horiz) => { const val = {ticks: {callback: rcM, color: txt}, grid: {color: grid}}, cat = {grid: {display: false}, ticks: {color: txt, font: {size: 11}}}; return horiz ? {x: val, y: cat} : {y: val, x: cat}; };
+    const set = (ch, labels, vals, cols, escalas) => {
+      ch.data.datasets[0].data = vals; ch.data.datasets[0].backgroundColor = cols;
+      if (escalas) ch.options.scales = escalas;
+      ch.data.datasets[0].borderColor = rcCss('--surface');
+      ch.update();
+    };
+    const est = rcAgg(rcFilt('est'), s => s.est), esp = rcAgg(rcFilt('esp'), s => s.esp), mes = rcAgg(rcFilt('mes'), s => s.mes),
+          prio = rcAgg(rcFilt('prio'), s => s.prio), tipo = rcAgg(rcFilt('tipo'), s => s.tipo);
+    set(rcCharts.est, RC_EST_ORDER, RC_EST_ORDER.map(k => Math.round(est[k]?.total || 0)), RC_EST_ORDER.map(k => rcDim(ac, rcSel.est !== null, k === rcSel.est)), ejes(true));
+    set(rcCharts.esp, RC_ESP_ORDER, RC_ESP_ORDER.map(k => Math.round(esp[k]?.neto || 0)), RC_ESP_ORDER.map(k => rcDim('#59a14f', rcSel.esp !== null, k === rcSel.esp)), ejes(true));
+    set(rcCharts.mes, RC_MESES, RC_MESES.map(k => Math.round(mes[k]?.total || 0)), RC_MESES.map(k => rcDim('#f28e2b', rcSel.mes !== null, k === rcSel.mes)), ejes(false));
+    set(rcCharts.prio, RC_PRIOS, RC_PRIOS.map(k => Math.round(prio[k]?.total || 0)), RC_PRIOS.map(k => rcDim(RC_PRIO_COL[k], rcSel.prio !== null, k === rcSel.prio)));
+    set(rcCharts.tipo, RC_TIPOS, RC_TIPOS.map(k => Math.round(tipo[k]?.total || 0)), RC_TIPOS.map((k, i) => rcDim(i ? '#e15759' : ac, rcSel.tipo !== null, k === rcSel.tipo)));
+  }
+  const d = rcFilt(null);
+  document.getElementById('rc-kpi-neto').textContent = rcClp.format(d.reduce((a, s) => a + s.neto, 0));
+  document.getElementById('rc-kpi-total').textContent = rcClp.format(Math.round(d.reduce((a, s) => a + s.total, 0)));
+  document.getElementById('rc-kpi-lineas').textContent = d.length;
+  document.getElementById('rc-kpi-emerg').textContent = d.filter(s => s.emerg).length;
+  const by = rcAgg(rcFilt('est'), s => s.est), tn = Object.values(by).reduce((a, b) => a + b.neto, 0),
+        tt = Object.values(by).reduce((a, b) => a + b.total, 0), mx = Math.max(1, ...Object.values(by).map(b => b.neto));
+  document.getElementById('rc-tbody').innerHTML = RC_EST_ORDER.map(k => {
+    const v = by[k] || {n: 0, neto: 0, total: 0, emerg: 0};
+    return `<tr data-k="${esc(k)}" class="${k === rcSel.est ? 'sel' : ''}"><td class="l">${esc(k)}</td><td class="l">${esc(RC_RBD[k] || '-')}</td><td>${v.n}</td>
+      <td>${v.emerg ? `<span class="rc-emerg">${v.emerg}</span>` : 0}</td><td>${rcClp.format(v.neto)}</td><td>${rcClp.format(Math.round(v.total))}</td>
+      <td>${rcPct(v.neto, tn)}<span class="rc-bar" style="width:${Math.round(40 * v.neto / mx)}px"></span></td></tr>`;
+  }).join('');
+  document.getElementById('rc-tfoot').innerHTML = `<tr><td class="l">Total</td><td></td><td>${Object.values(by).reduce((a, b) => a + b.n, 0)}</td>
+    <td>${Object.values(by).reduce((a, b) => a + b.emerg, 0)}</td><td>${rcClp.format(tn)}</td><td>${rcClp.format(Math.round(tt))}</td><td>100%</td></tr>`;
+  document.getElementById('rc-tbody-det').innerHTML = d.length ? d.map(s => `<tr><td class="l">${s.n}</td><td class="l">${esc(s.est)}</td><td class="l">${esc(s.esp)}</td>
+      <td class="l" style="color:${RC_PRIO_COL[s.prio]};font-weight:700">${esc(s.prio)}</td>
+      <td class="l ${s.emerg ? 'rc-emerg' : ''}">${esc(s.req)}${s.obs ? `<div style="color:var(--muted);font-size:11px;margin-top:2px;font-weight:400">${esc(s.obs)}</div>` : ''}</td>
+      <td>${s.cant} ${esc(s.unidad)}</td><td>${rcClp.format(s.neto)}</td><td>${rcClp.format(Math.round(s.total))}</td><td>${s.plazo}</td></tr>`).join('')
+    : '<tr><td class="l" colspan="9" style="color:var(--muted)">Sin registros para los filtros seleccionados</td></tr>';
+  const pills = Object.keys(rcSel).filter(k => rcSel[k] !== null).map(k =>
+    `<span class="rc-pill">${RC_LABEL[k]}: <b>${esc(rcSel[k])}</b><button onclick="rcToggle('${k}','${esc(rcSel[k]).replace(/'/g, "\\'")}')" title="Quitar filtro">×</button></span>`);
+  document.getElementById('rc-pills').innerHTML = pills.join('') || '<span style="color:var(--muted);font-size:12px">ninguno</span>';
+}
+document.addEventListener('click', e => {
+  const tr = e.target.closest('#rc-tbody tr[data-k]'); if (tr) rcToggle('est', tr.dataset.k);
+});
+
 // ==================== SUB-PESTAÑAS (Bodega / Gestión / Administración) ====================
 function showSub(grupo, id) {
   const map = {
     bodega: ['bod-inventario','bod-entregar','bod-custodia','bod-recepcion'],
     cajachica: ['cch-registrar','cch-reporte'],
-    gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-reportes','ges-analitica','ges-asignaciones','ges-rutas','ges-fotos'],
+    gestion: ['ges-bandeja','ges-validacion','ges-oc','ges-admin','ges-asignaciones','ges-rutas','ges-fotos'],
+    reportes: ['rep-costos','rep-seguimiento','rep-informes','rep-ia'],
     admin: ['adm-usuarios','adm-materiales','adm-herramientas','adm-empresas','adm-establecimientos']
   }[grupo];
   const barId = grupo==='admin' ? 'admin-subtabs' : grupo+'-subtabs';
@@ -2456,14 +2699,38 @@ function showSub(grupo, id) {
     'adm-usuarios': pintarAdminUsuarios, 'adm-materiales': ()=>pintarAdminCatalogo('material'),
     'adm-herramientas': ()=>pintarAdminCatalogo('herramienta'), 'adm-empresas': ()=>pintarAdminCatalogo('empresa'),
     'adm-establecimientos': ()=>pintarAdminCatalogo('establecimiento'),
-    'ges-reportes': pintarResumenReporte,
+    'rep-costos': pintarCostos, 'rep-seguimiento': pintarSeguimiento, 'rep-informes': pintarResumenReporte,
     'ges-asignaciones': pintarAsignaciones,
     'ges-rutas': pintarRutas,
     'ges-fotos': pintarGaleria,
     'cch-registrar': ()=>{ cchDetectados=[]; pintarCchDetectados(); const s=document.getElementById('cch-ia-status'); if(s) s.textContent=''; },
     'cch-reporte': pintarReporteCajaChica
   };
+  if (grupo === 'gestion') { const m = document.getElementById('gestion-menu'); if (m) m.style.display = 'none'; }
   if (refrescos[id]) refrescos[id]();
+}
+
+// Botón "Todas las opciones" de Gestión: lista todas las secciones con una línea de explicación
+const OPCIONES_GESTION = [
+  ['ges-bandeja', '📥 Bandeja', 'Tickets por evaluar y carga de tickets desde planilla'],
+  ['ges-validacion', '✅ Validar cierres', 'Trabajos ejecutados que esperan tu conformidad'],
+  ['ges-oc', '🏗️ Empresas / OC', 'Empresas, órdenes de compra y su avance'],
+  ['ges-admin', '⚙️ Administración', 'Usuarios, materiales, herramientas, empresas y colegios'],
+  ['ges-asignaciones', '🧭 Asignaciones', 'Qué colegios atiende cada maestro y gestor de comuna'],
+  ['ges-rutas', '🗺️ Rutas', 'Planificación de salidas a terreno'],
+  ['ges-fotos', '📷 Fotos', 'Galería de fotos de antes y después']
+];
+function toggleMenuGestion() {
+  const m = document.getElementById('gestion-menu');
+  if (m.style.display !== 'none') { m.style.display = 'none'; return; }
+  const visibles = new Set([...document.querySelectorAll('#gestion-subtabs .subtab-btn[data-sp]')]
+    .filter(b => b.style.display !== 'none').map(b => b.dataset.sp));
+  const activo = document.querySelector('#gestion-subtabs .subtab-btn.active')?.dataset.sp;
+  m.innerHTML = OPCIONES_GESTION.filter(([id]) => visibles.has(id)).map(([id, t, d]) =>
+    `<button class="menu-op${id === activo ? ' active' : ''}" onclick="showSub('gestion','${id}')"><b>${t}</b><span>${d}</span></button>`).join('') +
+    (sesion?.perfil === 'Infraestructura'
+      ? `<button class="menu-op" onclick="showTab('reportes')"><b>📊 Reportes</b><span>Costos, seguimiento, informes por colegio y analítica IA (pestaña aparte)</span></button>` : '');
+  m.style.display = 'grid';
 }
 
 // ==================== MÓDULO 3 · BODEGA ====================
@@ -4404,7 +4671,7 @@ function refrescarTodo() {
 }
 
 function showTab(t) {
-  ['dashboard','levantamiento','subsanacion','registros','bodega','cajachica','gestion','seguimiento'].forEach(x=>{
+  ['dashboard','levantamiento','subsanacion','registros','bodega','cajachica','gestion','reportes'].forEach(x=>{
     document.getElementById('tab-content-'+x).style.display = x===t ? 'block':'none';
     document.getElementById('tab-'+x).classList.toggle('active', x===t);
   });
@@ -4415,7 +4682,7 @@ function showTab(t) {
   if (t==='cajachica')   { poblarCajaChicaSelect(); showSub('cajachica','cch-registrar'); }
   // El Coordinador solo tiene acceso al subtab de Asignaciones dentro de Gestión
   if (t==='gestion')     showSub('gestion', sesion.perfil==='Coordinador' ? 'ges-asignaciones' : 'ges-bandeja');
-  if (t==='seguimiento') pintarSeguimiento();
+  if (t==='reportes')    showSub('reportes', 'rep-costos');
 }
 
 function guardarConfig() {
