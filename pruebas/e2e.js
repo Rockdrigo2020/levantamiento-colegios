@@ -702,9 +702,34 @@ async function main() {
   log('OK OC recepcionada, pago habilitado');
 
   // ---------------------------------------------------------------
+  section('REPORTES: una sola pestaña con costos, seguimiento, informes y analítica');
+  step = 'reportes: costos';
+  await page.click('#tab-reportes');
+  assert(await page.isVisible('#rc-kpi-lineas'), 'la pestaña Reportes debía abrir en Costos');
+  assert((await page.textContent('#rc-kpi-lineas')).trim() === '51', 'Costos debía mostrar 51 líneas cotizadas');
+  const barras = await page.locator('#reportes-subtabs .subtab-btn').allTextContents();
+  assert(barras.length === 4, 'Reportes debía tener 4 secciones (Costos, Seguimiento, Informes, Analítica IA), salió: ' + barras.join('|'));
+  await page.click('#rc-tbody tr[data-k="Escuela Quillaileo"]');
+  assert((await page.textContent('#rc-kpi-lineas')).trim() === '11', 'filtrar por Quillaileo debía dejar 11 líneas');
+  assert((await page.textContent('#rc-pills')).includes('Escuela Quillaileo'), 'debía verse el filtro activo');
+  await page.click('#rep-costos button:has-text("Limpiar filtros")');
+  assert((await page.textContent('#rc-kpi-lineas')).trim() === '51', 'limpiar filtros debía volver a 51 líneas');
+  log('OK Reportes · Costos: 51 líneas, filtro cruzado por colegio y limpiar filtros');
+  step = 'gestion: todas las opciones';
+  await page.click('#tab-gestion');
+  const subGes = await page.locator('#gestion-subtabs .subtab-btn[data-sp]').allTextContents();
+  assert(!subGes.some(t => /Reporter|Anal/.test(t)), 'Gestión ya no debía incluir Reportería ni Analítica IA, salió: ' + subGes.join('|'));
+  await page.click('#ges-todas-btn');
+  assert(await page.locator('#gestion-menu .menu-op').count() === 8, 'el menú debía listar 7 secciones de Gestión + Reportes');
+  await page.click('#gestion-menu .menu-op:has-text("Rutas")');
+  assert(await page.isVisible('#ges-rutas') && await page.isHidden('#gestion-menu'), 'elegir una opción debía abrirla y cerrar el menú');
+  log('OK Gestión: botón "Todas las opciones" abre el menú y navega');
+
+  // ---------------------------------------------------------------
   section('REPORTERÍA');
   step = 'reporteria';
-  await clickSub(page, 'gestion', 'ges-reportes');
+  await page.click('#tab-reportes');
+  await clickSub(page, 'reportes', 'rep-informes');
   await page.waitForTimeout(300);
   const resumen = await page.textContent('#ges-reporte-resumen');
   assert(/\d/.test(resumen), 'el resumen de reportería debía mostrar números');
@@ -745,7 +770,7 @@ async function main() {
   // ---------------------------------------------------------------
   section('ANALÍTICA IA (carga desde reportería + chat)');
   step = 'analitica ia';
-  await clickSub(page, 'gestion', 'ges-analitica');
+  await clickSub(page, 'reportes', 'rep-ia');
   await page.click('button:has-text("📥 Cargar desde Reportería")');
   await page.waitForTimeout(500);
   const dashVisible = await page.isVisible('#ia-dashboard');
@@ -760,7 +785,8 @@ async function main() {
   // ---------------------------------------------------------------
   section('SEGUIMIENTO (Módulo 7): costos, horas hombre y tareas por colegio');
   step = 'seguimiento tablero';
-  await page.click('#tab-seguimiento');
+  await page.click('#tab-reportes');
+  await clickSub(page, 'reportes', 'rep-seguimiento');
   await page.waitForTimeout(300);
   const segVals = await page.locator('#seg-kpis .kpi-val').allTextContents();
   // [tareas, resueltas, pendientes, horas, costo, dias]
@@ -820,7 +846,8 @@ async function main() {
   log('OK establecimiento nuevo creado con comuna y coordenadas; el sembrado ya mostraba sus coordenadas');
 
   step = 'el mapa de Seguimiento ahora muestra 2 colegios';
-  await page.click('#tab-seguimiento');
+  await page.click('#tab-reportes');
+  await clickSub(page, 'reportes', 'rep-seguimiento');
   await page.waitForTimeout(400);
   if (leafletCargo) {
     const pines = await page.locator('#seg-map .leaflet-interactive').count();
@@ -855,7 +882,7 @@ async function main() {
   assert(await page.isHidden('#tab-levantamiento'), 'Coordinador no debería ver Levantar');
   assert(await page.isHidden('#tab-subsanacion'), 'Coordinador no debería ver Subsanar');
   assert(await page.isHidden('#tab-bodega'), 'Coordinador no debería ver Bodega');
-  assert(await page.isHidden('#tab-seguimiento'), 'Coordinador no debería ver Seguimiento (exclusivo Infraestructura)');
+  assert(await page.isHidden('#tab-reportes'), 'Coordinador no debería ver Reportes (exclusivo Infraestructura)');
   assert(await page.isVisible('#tab-gestion'), 'Coordinador debería ver Gestión (solo el subtab Asignaciones)');
   log('OK visibilidad de pestañas correcta para Coordinador');
 
