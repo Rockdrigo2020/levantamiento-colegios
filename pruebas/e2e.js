@@ -715,6 +715,29 @@ async function main() {
   await page.click('#rep-costos button:has-text("Limpiar filtros")');
   assert((await page.textContent('#rc-kpi-lineas')).trim() === '51', 'limpiar filtros debía volver a 51 líneas');
   log('OK Reportes · Costos: 51 líneas, filtro cruzado por colegio y limpiar filtros');
+  step = 'reportes: proyectado vs ejecutado';
+  await page.evaluate(() => {
+    const mat = cat.materiales.find(m => +m.costo_referencial > 0);
+    const est = cat.establecimientos.find(e => String(e.rbd).replace(/\D/g, '') === '43729');   // Escuela Quillaileo
+    obs.push({id_local: 'T_COSTO', ticket: 'SLEP-TEST-1', id_establecimiento: est.id_establecimiento, descripcion: '[Gasfitería] prueba de costo',
+              prioridad: 'Alta', estado: 'Cerrado', fecha_registro: new Date().toISOString(), synced: true});
+    subs.push({id_subsanacion: 'S_COSTO', id_local_obs: 'T_COSTO', ticket: 'SLEP-TEST-1', materiales: [{id_material: mat.id_material, cantidad: 3}], fecha_ejecucion: '2026-10-20T12:00:00Z'});
+    window.__costoEsperado = 3 * (+mat.costo_referencial);
+    pintarCostos();
+  });
+  const num = async id => +(await page.textContent(id)).replace(/\D/g, '');
+  const esperado = await page.evaluate(() => window.__costoEsperado);
+  assert(await num('#rc-kpi-ejec') === esperado, 'Ejecutado debía sumar los materiales de la subsanación (' + esperado + '), salió: ' + await page.textContent('#rc-kpi-ejec'));
+  assert((await page.textContent('#rc-kpi-trab')).startsWith('1 de'), 'Trabajos ejecutados debía contar 1, salió: ' + await page.textContent('#rc-kpi-trab'));
+  const filaQ = (await page.textContent('#rc-tbody tr[data-k="Escuela Quillaileo"]')).replace(/\s+/g, ' ');
+  assert(/1\/1/.test(filaQ), 'la fila de Quillaileo debía mostrar 1/1 tickets ejecutados: ' + filaQ);
+  await page.click('#rc-tbody tr[data-k="Escuela Quillaileo"]');
+  assert(await num('#rc-kpi-ejec') === esperado, 'filtrado por Quillaileo, Ejecutado debía mantenerse');
+  await page.click('#rep-costos button:has-text("Limpiar filtros")');
+  const datos = await page.evaluate(() => rcCharts.est.data.datasets.map(d => [d.label, d.data.reduce((a, b) => a + b, 0)]));
+  assert(datos[0][0] === 'Proyectado' && datos[1][0] === 'Ejecutado' && datos[1][1] === esperado, 'el gráfico por establecimiento debía tener Proyectado y Ejecutado: ' + JSON.stringify(datos));
+  await page.evaluate(() => { obs.splice(obs.findIndex(o => o.id_local === 'T_COSTO'), 1); subs.splice(subs.findIndex(x => x.id_subsanacion === 'S_COSTO'), 1); });
+  log('OK Reportes · Costos: proyectado vs ejecutado (KPIs, fila por colegio y gráfico)');
   step = 'gestion: todas las opciones';
   await page.click('#tab-gestion');
   const subGes = await page.locator('#gestion-subtabs .subtab-btn[data-sp]').allTextContents();
