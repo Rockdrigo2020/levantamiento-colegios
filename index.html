@@ -480,6 +480,9 @@
   .rc-pill { background:var(--surface2); border:1px solid var(--border); border-radius:99px; padding:3px 10px; font-size:12px; display:inline-flex; gap:6px; align-items:center }
   .rc-pill button { border:0; background:none; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 }
   .rc-note { color:var(--muted); font-size:11px; margin-top:2px }
+  .rc-sec { font-size:12px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin:4px 2px 8px }
+  .rc-aviso { font-size:11px; color:var(--muted); line-height:1.5; margin:-2px 2px 12px }
+  .rc-ok { color:var(--ok); font-weight:700 }
   .rc-hint { color:var(--muted); font-size:11px; font-weight:400; margin-left:6px }
   .rc-box { position:relative; height:260px } .rc-box.rc-alto { height:420px } .rc-box.rc-bajo { height:220px }
   .rc-scroll { overflow-x:auto } .rc-alto-scroll { max-height:420px; overflow:auto }
@@ -1061,9 +1064,17 @@
           <div class="kpi-card"><div class="kpi-lbl">Líneas cotizadas</div><div class="kpi-val" id="rc-kpi-lineas">–</div></div>
           <div class="kpi-card"><div class="kpi-lbl">Emergencias por lluvia</div><div class="kpi-val" id="rc-kpi-emerg" style="color:var(--danger)">–</div></div>
         </div>
-        <div class="card mb-3"><div class="card-title mb-3">Costo total con IVA por establecimiento</div><div class="rc-box rc-alto"><canvas id="rc-c-est"></canvas></div></div>
-        <div class="card mb-3"><div class="card-title mb-3">Costo neto por especialidad</div><div class="rc-box"><canvas id="rc-c-esp"></canvas></div></div>
-        <div class="card mb-3"><div class="card-title mb-3">Costo por mes de ingreso <span class="rc-hint">"Sin fecha" = sin fecha de solicitud</span></div><div class="rc-box rc-bajo"><canvas id="rc-c-mes"></canvas></div></div>
+        <div class="rc-sec">Proyectado vs ejecutado</div>
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-lbl">Ejecutado (materiales)</div><div class="kpi-val" id="rc-kpi-ejec" style="color:var(--ok)">–</div><div class="rc-note">Materiales declarados en las subsanaciones, a costo de bodega</div></div>
+          <div class="kpi-card"><div class="kpi-lbl">Avance del gasto</div><div class="kpi-val" id="rc-kpi-avance">–</div><div class="rc-note">Ejecutado sobre proyectado neto directo</div></div>
+          <div class="kpi-card"><div class="kpi-lbl">Trabajos ejecutados</div><div class="kpi-val" id="rc-kpi-trab">–</div><div class="rc-note" id="rc-kpi-trab-n">Tickets en Ejecutado o Cerrado</div></div>
+          <div class="kpi-card"><div class="kpi-lbl">Por ejecutar</div><div class="kpi-val" id="rc-kpi-pend">–</div><div class="rc-note">Proyectado neto menos ejecutado</div></div>
+        </div>
+        <p class="rc-aviso">Solo se comparan los colegios incluidos en la cotización. Lo ejecutado sale de los tickets y subsanaciones registrados en la app; no incluye mano de obra ni contratistas (las órdenes de compra se muestran aparte). El filtro por tipo de solicitud solo afecta lo proyectado.</p>
+        <div class="card mb-3"><div class="card-title mb-3">Proyectado vs ejecutado por establecimiento <span class="rc-hint">neto, sin IVA</span></div><div class="rc-box rc-alto"><canvas id="rc-c-est"></canvas></div></div>
+        <div class="card mb-3"><div class="card-title mb-3">Proyectado vs ejecutado por especialidad <span class="rc-hint">neto, sin IVA</span></div><div class="rc-box"><canvas id="rc-c-esp"></canvas></div></div>
+        <div class="card mb-3"><div class="card-title mb-3">Proyectado vs ejecutado por mes <span class="rc-hint">proyectado: mes de ingreso · ejecutado: mes de ejecución</span></div><div class="rc-box rc-bajo"><canvas id="rc-c-mes"></canvas></div></div>
         <div class="grid-2 mb-3">
           <div class="card"><div class="card-title mb-3">Por prioridad</div><div class="rc-box rc-bajo"><canvas id="rc-c-prio"></canvas></div></div>
           <div class="card"><div class="card-title mb-3">Por tipo de solicitud</div><div class="rc-box rc-bajo"><canvas id="rc-c-tipo"></canvas></div></div>
@@ -1071,8 +1082,13 @@
         <div class="card mb-3">
           <div class="card-title mb-3">Resumen por establecimiento <span class="rc-hint">toca una fila para filtrar</span></div>
           <div class="rc-scroll"><table class="rc-tbl">
-            <thead><tr><th class="l">Establecimiento</th><th class="l">RBD</th><th>Líneas</th><th>Emerg.</th><th>Neto directo</th><th>Total con IVA</th><th>Part.</th></tr></thead>
+            <thead><tr><th class="l">Establecimiento</th><th class="l">RBD</th><th>Líneas</th><th>Emerg.</th><th>Neto directo (proyectado)</th><th>Total con IVA</th><th>Part.</th><th>Ejecutado</th><th>Avance</th><th>Tickets ejec./total</th></tr></thead>
             <tbody id="rc-tbody"></tbody><tfoot id="rc-tfoot"></tfoot></table></div>
+        </div>
+        <div class="card mb-3" id="rc-oc-card" style="display:none">
+          <div class="card-title mb-3">Obras por orden de compra <span class="rc-hint">contratado vs avance registrado</span></div>
+          <div class="rc-scroll"><table class="rc-tbl"><thead><tr><th class="l">Orden de compra</th><th class="l">Empresa</th><th>Monto</th><th>Avance</th><th>Ejecutado</th></tr></thead>
+            <tbody id="rc-oc-tbody"></tbody><tfoot id="rc-oc-tfoot"></tfoot></table></div>
         </div>
         <div class="card mb-3">
           <div class="card-title mb-3">Detalle de cotización <span class="rc-hint">según los filtros activos</span></div>
@@ -2571,20 +2587,20 @@ const RC_RAW = [
   [51,"—","Ronda de Niños y Niñas","","Aseo y ornato","Retiro de ramas.","Baja",1,"gl",150000,60,"Incluye retiro y disposición final."]
 ];
 const RC_FACTOR_TOTAL = 1 + 0.25 + 0.19 * (1 + 0.25);   // gastos generales 15% + imprevistos 10%, luego IVA 19% = 1,4875
-const RC_MES = {'07':'Jul','08':'Ago','09':'Sep','10':'Oct'};
-const RC_MESES = ['Jul','Ago','Sep','Oct','Sin fecha'];
+const RC_MES = {'07':'Jul','08':'Ago','09':'Sep','10':'Oct','11':'Nov','12':'Dic'};
+const RC_MESES = ['Jul','Ago','Sep','Oct','Nov','Dic','Sin fecha'];
 const RC_PRIOS = ['Alta','Media','Baja'];
 const RC_PRIO_COL = {Alta:'#e15759', Media:'#f28e2b', Baja:'#59a14f'};
 const RC_TIPOS = ['Regular','Emergencia por lluvia'];
 function rcEspecialidad(area) {
   const t = area.split('/')[0].trim().toLowerCase();
   if (t.startsWith('electric')) return 'Electricidad';
-  if (t.startsWith('gasfit')) return 'Gasfitería';
-  if (t.startsWith('cubiert') || t.startsWith('estructura')) return 'Cubiertas y estructura';
+  if (t.startsWith('gasfit') || t.startsWith('sanitar') || t.startsWith('agua potable')) return 'Gasfitería';
+  if (t.startsWith('cubiert') || t.startsWith('estructura') || t.startsWith('aguas lluvia')) return 'Cubiertas y estructura';
   if (t.startsWith('aseo')) return 'Aseo y ornato';
   if (t.startsWith('cerraj')) return 'Cerrajería';
-  if (t.startsWith('obras')) return 'Obras civiles';
-  if (t.startsWith('climat')) return 'Climatización';
+  if (t.startsWith('obras') || t.startsWith('pintura')) return 'Obras civiles';
+  if (t.startsWith('climat') || t.startsWith('calefac')) return 'Climatización';
   if (t.startsWith('equipam')) return 'Equipamiento';
   if (t.startsWith('carpint')) return 'Carpintería';
   return 'Otros';
@@ -2615,56 +2631,95 @@ function rcLimpiar() { Object.keys(rcSel).forEach(k => rcSel[k] = null); pintarC
 const rcCss = v => getComputedStyle(document.body).getPropertyValue(v).trim();
 const rcDim = (color, activo, esSel) => (!activo || esSel) ? color : color + '40';
 let rcCharts = null, rcTema = null;
+// ---- Lo ejecutado: tickets y subsanaciones de la app, solo de los colegios incluidos en la cotización ----
+function rcIdEstab(nombre, rbd) {
+  const dig = x => String(x || '').replace(/\D/g, ''), lista = cat?.establecimientos || [];
+  const porRbd = dig(rbd) && lista.find(e => dig(e.rbd) === dig(rbd));
+  return (porRbd || matchEstabFlexible(nombre))?.id_establecimiento || '';
+}
+function rcEjecutados() {
+  const idDe = {}; RC_EST_ORDER.forEach(n => { const id = rcIdEstab(n, RC_RBD[n]); if (id) idDe[id] = n; });
+  return obs.filter(o => idDe[o.id_establecimiento]).map(o => {
+    const m = String(o.descripcion || '').match(/^\s*\[([^\]]+)\]/);
+    const ss = subs.filter(x => x.id_local_obs === o.id_local || (o.ticket && x.ticket === o.ticket)), ult = ss[ss.length - 1];
+    const ejec = o.estado === 'Ejecutado' || o.estado === 'Cerrado';
+    const f = ult && ult.fecha_ejecucion ? fechaISO(ult.fecha_ejecucion) : '';
+    return {est: idDe[o.id_establecimiento], esp: rcEspecialidad(m ? m[1] : ''), prio: RC_PRIOS.includes(o.prioridad) ? o.prioridad : null,
+            mes: ejec ? (RC_MES[f.slice(5, 7)] || 'Sin fecha') : null, costo: ss.reduce((t, x) => t + costoSubsanacion(x), 0), ejec};
+  });
+}
+// Mismos filtros que lo proyectado (menos "tipo", que no existe en los tickets)
+const rcEjecFilt = (lista, excluir) => lista.filter(r => ['est', 'esp', 'prio', 'mes'].every(k => k === excluir || rcSel[k] === null || r[k] === rcSel[k]));
+const rcEjecSuma = (lista, key) => { const o = {}; lista.forEach(r => { const k = r[key]; if (k == null) return; (o[k] = o[k] || {n: 0, ejec: 0, costo: 0}); o[k].n++; if (r.ejec) o[k].ejec++; o[k].costo += r.costo; }); return o; };
 function rcCrear() {
-  const tip = c => ' ' + rcClp.format(Math.round(c.raw));
+  const tip = c => ' ' + (c.dataset?.label ? c.dataset.label + ': ' : '') + rcClp.format(Math.round(c.raw));
   const base = {responsive: true, maintainAspectRatio: false, animation: {duration: 200}, plugins: {legend: {display: false}, tooltip: {callbacks: {label: tip}}}};
-  const mk = (id, type, labels, extra) => new Chart(document.getElementById(id), {type, data: {labels, datasets: [{data: [], backgroundColor: [], borderRadius: type === 'bar' ? 2 : 0, borderWidth: type === 'bar' ? 0 : 2}]}, options: Object.assign({}, base, extra)});
+  const dsBar = (label, extra) => Object.assign({label, data: [], backgroundColor: [], borderRadius: 2, borderWidth: 0}, extra || {});
+  const mk = (id, type, labels, extra, datasets) => new Chart(document.getElementById(id), {type, data: {labels, datasets: datasets || [{data: [], backgroundColor: [], borderRadius: type === 'bar' ? 2 : 0, borderWidth: type === 'bar' ? 0 : 2}]}, options: Object.assign({}, base, extra)});
   const dona = (dim, orden) => ({cutout: '55%', plugins: {legend: {display: true, position: 'bottom', labels: {boxWidth: 12, font: {size: 11}}, onClick: (e, it) => rcToggle(dim, orden[it.index])}, tooltip: {callbacks: {label: c => c.label + ': ' + rcClp.format(Math.round(c.raw))}}}, onClick: (e, els) => { if (els.length) rcToggle(dim, orden[els[0].index]); }});
+  const dual = (dim, orden, horiz) => ({indexAxis: horiz ? 'y' : 'x',
+    plugins: {legend: {display: true, position: 'bottom', labels: {boxWidth: 12, font: {size: 11}}}, tooltip: {callbacks: {label: c => ' ' + c.dataset.label + ': ' + rcClp.format(Math.round(c.raw))}}},
+    onClick: (e, els) => { if (els.length) rcToggle(dim, orden[els[0].index]); }});
+  const dsDual = () => [dsBar('Proyectado'), dsBar('Ejecutado')];
   rcCharts = {
-    est: mk('rc-c-est', 'bar', RC_EST_ORDER, {indexAxis: 'y', onClick: (e, els) => { if (els.length) rcToggle('est', RC_EST_ORDER[els[0].index]); }}),
-    esp: mk('rc-c-esp', 'bar', RC_ESP_ORDER, {indexAxis: 'y', plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => ' Neto: ' + rcClp.format(Math.round(c.raw))}}}, onClick: (e, els) => { if (els.length) rcToggle('esp', RC_ESP_ORDER[els[0].index]); }}),
-    mes: mk('rc-c-mes', 'bar', RC_MESES, {onClick: (e, els) => { if (els.length) rcToggle('mes', RC_MESES[els[0].index]); }}),
+    est: mk('rc-c-est', 'bar', RC_EST_ORDER, dual('est', RC_EST_ORDER, true), dsDual()),
+    esp: mk('rc-c-esp', 'bar', RC_ESP_ORDER, dual('esp', RC_ESP_ORDER, true), dsDual()),
+    mes: mk('rc-c-mes', 'bar', RC_MESES, dual('mes', RC_MESES, false), dsDual()),
     prio: mk('rc-c-prio', 'doughnut', RC_PRIOS, dona('prio', RC_PRIOS)),
     tipo: mk('rc-c-tipo', 'doughnut', RC_TIPOS, dona('tipo', RC_TIPOS))
   };
 }
 function pintarCostos() {
+  const ejAll = rcEjecutados();
   if (typeof Chart === 'undefined') { toast('⚠️ Sin conexión: no se pudo cargar el motor de gráficos', 'err'); }
   else {
     if (rcCharts && rcTema !== isDark) { Object.values(rcCharts).forEach(c => c.destroy()); rcCharts = null; }   // para que tome los colores del tema
     if (!rcCharts) { rcCrear(); rcTema = isDark; }
-    const txt = rcCss('--muted'), grid = rcCss('--border'), ac = '#4e79a7';
+    const txt = rcCss('--muted'), grid = rcCss('--border'), ac = '#4e79a7', ver = '#2e8b57';
     Chart.defaults.color = txt;
-    const ejes = (horiz) => { const val = {ticks: {callback: rcM, color: txt}, grid: {color: grid}}, cat = {grid: {display: false}, ticks: {color: txt, font: {size: 11}}}; return horiz ? {x: val, y: cat} : {y: val, x: cat}; };
-    const set = (ch, labels, vals, cols, escalas) => {
-      ch.data.datasets[0].data = vals; ch.data.datasets[0].backgroundColor = cols;
-      if (escalas) ch.options.scales = escalas;
-      ch.data.datasets[0].borderColor = rcCss('--surface');
-      ch.update();
-    };
+    const ejes = horiz => { const val = {ticks: {callback: rcM, color: txt}, grid: {color: grid}}, cat = {grid: {display: false}, ticks: {color: txt, font: {size: 11}}}; return horiz ? {x: val, y: cat} : {y: val, x: cat}; };
     const est = rcAgg(rcFilt('est'), s => s.est), esp = rcAgg(rcFilt('esp'), s => s.esp), mes = rcAgg(rcFilt('mes'), s => s.mes),
           prio = rcAgg(rcFilt('prio'), s => s.prio), tipo = rcAgg(rcFilt('tipo'), s => s.tipo);
-    set(rcCharts.est, RC_EST_ORDER, RC_EST_ORDER.map(k => Math.round(est[k]?.total || 0)), RC_EST_ORDER.map(k => rcDim(ac, rcSel.est !== null, k === rcSel.est)), ejes(true));
-    set(rcCharts.esp, RC_ESP_ORDER, RC_ESP_ORDER.map(k => Math.round(esp[k]?.neto || 0)), RC_ESP_ORDER.map(k => rcDim('#59a14f', rcSel.esp !== null, k === rcSel.esp)), ejes(true));
-    set(rcCharts.mes, RC_MESES, RC_MESES.map(k => Math.round(mes[k]?.total || 0)), RC_MESES.map(k => rcDim('#f28e2b', rcSel.mes !== null, k === rcSel.mes)), ejes(false));
-    set(rcCharts.prio, RC_PRIOS, RC_PRIOS.map(k => Math.round(prio[k]?.total || 0)), RC_PRIOS.map(k => rcDim(RC_PRIO_COL[k], rcSel.prio !== null, k === rcSel.prio)));
-    set(rcCharts.tipo, RC_TIPOS, RC_TIPOS.map(k => Math.round(tipo[k]?.total || 0)), RC_TIPOS.map((k, i) => rcDim(i ? '#e15759' : ac, rcSel.tipo !== null, k === rcSel.tipo)));
+    const eEst = rcEjecSuma(rcEjecFilt(ejAll, 'est'), 'est'), eEsp = rcEjecSuma(rcEjecFilt(ejAll, 'esp'), 'esp'), eMes = rcEjecSuma(rcEjecFilt(ejAll, 'mes'), 'mes');
+    const surf = rcCss('--surface');
+    const dual = (ch, orden, proy, ejec, dim, escalas) => {
+      ch.data.datasets[0].data = orden.map(k => Math.round(proy[k]?.neto || 0));
+      ch.data.datasets[0].backgroundColor = orden.map(k => rcDim(ac, rcSel[dim] !== null, k === rcSel[dim]));
+      ch.data.datasets[1].data = orden.map(k => Math.round(ejec[k]?.costo || 0));
+      ch.data.datasets[1].backgroundColor = orden.map(k => rcDim(ver, rcSel[dim] !== null, k === rcSel[dim]));
+      ch.options.scales = escalas; ch.update();
+    };
+    dual(rcCharts.est, RC_EST_ORDER, est, eEst, 'est', ejes(true));
+    dual(rcCharts.esp, RC_ESP_ORDER, esp, eEsp, 'esp', ejes(true));
+    dual(rcCharts.mes, RC_MESES, mes, eMes, 'mes', ejes(false));
+    const don = (ch, orden, agg, dim, colores) => { ch.data.datasets[0].data = orden.map(k => Math.round(agg[k]?.total || 0)); ch.data.datasets[0].backgroundColor = orden.map((k, i) => rcDim(colores(k, i), rcSel[dim] !== null, k === rcSel[dim])); ch.data.datasets[0].borderColor = surf; ch.update(); };
+    don(rcCharts.prio, RC_PRIOS, prio, 'prio', k => RC_PRIO_COL[k]);
+    don(rcCharts.tipo, RC_TIPOS, tipo, 'tipo', (k, i) => i ? '#e15759' : ac);
   }
-  const d = rcFilt(null);
-  document.getElementById('rc-kpi-neto').textContent = rcClp.format(d.reduce((a, s) => a + s.neto, 0));
+  const d = rcFilt(null), ej = rcEjecFilt(ejAll, null);
+  const neto = d.reduce((a, s) => a + s.neto, 0), costoEj = ej.reduce((a, r) => a + r.costo, 0), hechos = ej.filter(r => r.ejec).length;
+  document.getElementById('rc-kpi-neto').textContent = rcClp.format(neto);
   document.getElementById('rc-kpi-total').textContent = rcClp.format(Math.round(d.reduce((a, s) => a + s.total, 0)));
   document.getElementById('rc-kpi-lineas').textContent = d.length;
   document.getElementById('rc-kpi-emerg').textContent = d.filter(s => s.emerg).length;
-  const by = rcAgg(rcFilt('est'), s => s.est), tn = Object.values(by).reduce((a, b) => a + b.neto, 0),
+  document.getElementById('rc-kpi-ejec').textContent = rcClp.format(Math.round(costoEj));
+  document.getElementById('rc-kpi-avance').textContent = rcPct(costoEj, neto);
+  document.getElementById('rc-kpi-trab').textContent = hechos + ' de ' + ej.length;
+  document.getElementById('rc-kpi-trab-n').textContent = ej.length ? rcPct(hechos, ej.length) + ' de los tickets de estos colegios (Ejecutado o Cerrado)' : 'No hay tickets de estos colegios';
+  document.getElementById('rc-kpi-pend').textContent = rcClp.format(Math.max(0, Math.round(neto - costoEj)));
+  const by = rcAgg(rcFilt('est'), s => s.est), eBy = rcEjecSuma(rcEjecFilt(ejAll, 'est'), 'est'), tn = Object.values(by).reduce((a, b) => a + b.neto, 0),
         tt = Object.values(by).reduce((a, b) => a + b.total, 0), mx = Math.max(1, ...Object.values(by).map(b => b.neto));
   document.getElementById('rc-tbody').innerHTML = RC_EST_ORDER.map(k => {
-    const v = by[k] || {n: 0, neto: 0, total: 0, emerg: 0};
+    const v = by[k] || {n: 0, neto: 0, total: 0, emerg: 0}, e = eBy[k] || {n: 0, ejec: 0, costo: 0};
     return `<tr data-k="${esc(k)}" class="${k === rcSel.est ? 'sel' : ''}"><td class="l">${esc(k)}</td><td class="l">${esc(RC_RBD[k] || '-')}</td><td>${v.n}</td>
       <td>${v.emerg ? `<span class="rc-emerg">${v.emerg}</span>` : 0}</td><td>${rcClp.format(v.neto)}</td><td>${rcClp.format(Math.round(v.total))}</td>
-      <td>${rcPct(v.neto, tn)}<span class="rc-bar" style="width:${Math.round(40 * v.neto / mx)}px"></span></td></tr>`;
+      <td>${rcPct(v.neto, tn)}<span class="rc-bar" style="width:${Math.round(40 * v.neto / mx)}px"></span></td>
+      <td class="rc-ok">${rcClp.format(Math.round(e.costo))}</td><td>${rcPct(e.costo, v.neto)}</td><td>${e.ejec}/${e.n}</td></tr>`;
   }).join('');
+  const eTot = Object.values(eBy).reduce((a, b) => ({n: a.n + b.n, ejec: a.ejec + b.ejec, costo: a.costo + b.costo}), {n: 0, ejec: 0, costo: 0});
   document.getElementById('rc-tfoot').innerHTML = `<tr><td class="l">Total</td><td></td><td>${Object.values(by).reduce((a, b) => a + b.n, 0)}</td>
-    <td>${Object.values(by).reduce((a, b) => a + b.emerg, 0)}</td><td>${rcClp.format(tn)}</td><td>${rcClp.format(Math.round(tt))}</td><td>100%</td></tr>`;
+    <td>${Object.values(by).reduce((a, b) => a + b.emerg, 0)}</td><td>${rcClp.format(tn)}</td><td>${rcClp.format(Math.round(tt))}</td><td>100%</td>
+    <td class="rc-ok">${rcClp.format(Math.round(eTot.costo))}</td><td>${rcPct(eTot.costo, tn)}</td><td>${eTot.ejec}/${eTot.n}</td></tr>`;
   document.getElementById('rc-tbody-det').innerHTML = d.length ? d.map(s => `<tr><td class="l">${s.n}</td><td class="l">${esc(s.est)}</td><td class="l">${esc(s.esp)}</td>
       <td class="l" style="color:${RC_PRIO_COL[s.prio]};font-weight:700">${esc(s.prio)}</td>
       <td class="l ${s.emerg ? 'rc-emerg' : ''}">${esc(s.req)}${s.obs ? `<div style="color:var(--muted);font-size:11px;margin-top:2px;font-weight:400">${esc(s.obs)}</div>` : ''}</td>
@@ -2673,6 +2728,19 @@ function pintarCostos() {
   const pills = Object.keys(rcSel).filter(k => rcSel[k] !== null).map(k =>
     `<span class="rc-pill">${RC_LABEL[k]}: <b>${esc(rcSel[k])}</b><button onclick="rcToggle('${k}','${esc(rcSel[k]).replace(/'/g, "\\'")}')" title="Quitar filtro">×</button></span>`);
   document.getElementById('rc-pills').innerHTML = pills.join('') || '<span style="color:var(--muted);font-size:12px">ninguno</span>';
+  // Órdenes de compra: lo contratado vs el avance registrado por partida (las OC no están ligadas a un colegio)
+  const card = document.getElementById('rc-oc-card'), lista = (typeof ocs !== 'undefined' ? ocs : []).filter(oc => (oc.partidas || []).length);
+  card.style.display = lista.length ? '' : 'none';
+  if (lista.length) {
+    let tm = 0, te = 0;
+    document.getElementById('rc-oc-tbody').innerHTML = lista.map(oc => {
+      const monto = oc.partidas.reduce((a, p) => a + (+p.monto || 0), 0), ejec = oc.partidas.reduce((a, p) => a + (+p.monto || 0) * (+p.avance || 0) / 100, 0);
+      tm += monto; te += ejec;
+      return `<tr><td class="l">${esc(oc.numero_oc || oc.id_oc || '—')}</td><td class="l">${esc((cat?.empresas || []).find(e => e.id_empresa == oc.id_empresa)?.nombre || '—')}</td>
+        <td>${rcClp.format(monto)}</td><td>${rcPct(ejec, monto)}</td><td class="rc-ok">${rcClp.format(Math.round(ejec))}</td></tr>`;
+    }).join('');
+    document.getElementById('rc-oc-tfoot').innerHTML = `<tr><td class="l">Total</td><td></td><td>${rcClp.format(tm)}</td><td>${rcPct(te, tm)}</td><td class="rc-ok">${rcClp.format(Math.round(te))}</td></tr>`;
+  }
 }
 document.addEventListener('click', e => {
   const tr = e.target.closest('#rc-tbody tr[data-k]'); if (tr) rcToggle('est', tr.dataset.k);
