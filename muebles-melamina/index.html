@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora de planchas de melamina</title>
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<header class="cab">
+  <div class="cab-in">
+    <h1>Planchas de melamina</h1>
+    <p>Calcule los cortes y cuántas planchas necesita para su mueble.</p>
+    <p class="ejemplo-link"><button type="button" class="sec chico" data-accion="ejemplo">Ver ejemplo</button></p>
+  </div>
+</header>
+<div id="banner" class="banner" hidden></div>
+<main class="contenedor">
+  <ol id="pasos" class="pasos" aria-label="Pasos"></ol>
+  <div id="aviso" class="aviso" role="status" hidden></div>
+  <div id="contenido" aria-live="polite"></div>
+</main>
+<footer class="pie">
+  <p>Cálculo referencial. Verifique medidas y disponibilidad antes de comprar.</p>
+</footer>
+<script src="js/config.js"></script>
+<script src="js/catalogo.js"></script>
+<script src="js/motor.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
